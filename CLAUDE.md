@@ -121,6 +121,24 @@ src/pages/
 
 Data lama (`infarm_tasks_v5`) dimigrasi otomatis sekali ke v6 oleh `taskStore.load()`. Task contoh lama dibuang, lampiran non-gambar lama dibuang (dulu hanya nama file), dan key v5 dibiarkan sebagai cadangan.
 
+## Aturan tata letak UI (acuan: mockup)
+
+Mockup final: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu (catatan hijau "Aturan tata letak" di canvas). UI di kode harus mengikuti mockup ini.
+
+1. **Header:** logo + judul + subjudul satu baris di kiri; tombol aksi di kanan. Isi tombol SAMA di semua tab dan perangkat; di HP hanya ikon dengan urutan yang sama.
+   - Tim (`/tim`, `/tim/analitik`): Halaman status · Salin link form request · Export CSV.
+   - Status (`/`): Buat request baru. Form & terkirim (`/request`): Lihat status semua request.
+2. **Header hijau hanya berisi tombol aksi.** Pencarian, tab, dan filter selalu di isi halaman, bukan di header.
+3. **Urutan halaman tim:**
+   - Kanban: tab Kanban/Analitik → 5 kartu angka → beban kerja per desainer → baris filter (cari, PIC, deadline) → kolom Kanban (HP: satu kolom, dipilih lewat tombol kolom).
+   - Analitik: tab → periode → 5 kartu KPI → per desainer → per kategori/divisi.
+   - Di HP, kartu angka/KPI jadi satu baris yang bisa digeser.
+4. **Satu anatomi kartu** (board dan halaman status): badge status + badge urgensi, deadline di kanan → judul → kategori · requester → PIC + ringkasan referensi → progres → tombol aksi di bawah.
+5. **Detail task:** tombol Tutup di kanan atas (desktop: panel kanan 480px, HP: layar penuh). Footer menempel di bawah: aksi utama lebar penuh, lalu Edit (kiri) dan Hapus task (kanan). Ganti PIC lewat tombol "Ganti" di kotak PIC.
+6. **Desktop dan HP memakai komponen yang sama**; HP hanya beda ukuran sentuh (44px) dan susunan menumpuk. Dialog di HP muncul dari bawah dengan tombol utama di atas.
+7. **Lebar konten:** halaman tim 1400px, halaman requester 1040px (halaman terkirim 760px).
+8. **Skala:** teks 13px, judul 15–18px, angka 20px; tombol 36px (HP 44px), CTA 42px (HP 48px), input 38px (HP 44px).
+
 ## Pola dan konvensi kode
 
 - Komponen tidak pernah menyentuh localStorage: baca lewat `useTasks()`, ubah lewat fungsi di `taskActions.js`.
