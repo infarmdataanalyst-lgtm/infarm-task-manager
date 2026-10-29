@@ -1,6 +1,6 @@
 // /tim/* — kerangka halaman tim desain: kunci PIN, header, tab Kanban/Analitik.
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { ArrowRight, Copy, Download, LayoutList } from "lucide-react";
 import { useTasks } from "../../data/useTasks";
@@ -15,6 +15,7 @@ function PinScreen({ onUnlocked }) {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [serverError, setServerError] = useState("");
   const refs = useRef([]);
 
   const setDigit = (i, value) => {
@@ -31,6 +32,7 @@ function PinScreen({ onUnlocked }) {
       if (clean && i < PIN_LENGTH - 1) refs.current[i + 1]?.focus();
     }
     setError(false);
+    setServerError("");
   };
 
   const submit = async (e) => {
@@ -38,7 +40,14 @@ function PinScreen({ onUnlocked }) {
     const pin = digits.join("");
     if (pin.length < PIN_LENGTH) return setError(true);
     setChecking(true);
-    const ok = await unlock(pin, remember);
+    let ok = false;
+    try {
+      ok = await unlock(pin, remember);
+    } catch (err) {
+      setChecking(false);
+      setServerError(err.message || "Tidak bisa memeriksa PIN. Coba lagi.");
+      return;
+    }
     setChecking(false);
     if (ok) onUnlocked();
     else {
@@ -78,6 +87,7 @@ function PinScreen({ onUnlocked }) {
               ))}
             </div>
             {error && <p className="error-text" role="alert">PIN salah atau belum lengkap. Coba lagi.</p>}
+            {serverError && <p className="error-text" role="alert">{serverError}</p>}
             <label className="row" style={{ minHeight: 40, color: "var(--zinc-700)" }}>
               <input type="checkbox" className="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               Ingat di perangkat ini
@@ -95,12 +105,25 @@ function PinScreen({ onUnlocked }) {
 }
 
 export default function TeamLayout() {
-  const [unlocked, setUnlocked] = useState(isUnlocked);
+  const [unlocked, setUnlocked] = useState(null);
   const { tasks } = useTasks();
   const [toast, showToast] = useToast();
   const { pathname } = useLocation();
   const onAnalytics = pathname.startsWith("/tim/analitik");
 
+  useEffect(() => {
+    let alive = true;
+    isUnlocked().then((ok) => alive && setUnlocked(ok));
+    // Server menolak PIN (salah/diganti) → kembali ke layar PIN.
+    const lock = () => setUnlocked(false);
+    window.addEventListener("infarm:pin-invalid", lock);
+    return () => {
+      alive = false;
+      window.removeEventListener("infarm:pin-invalid", lock);
+    };
+  }, []);
+
+  if (unlocked === null) return null;
   if (!unlocked) return <PinScreen onUnlocked={() => setUnlocked(true)} />;
 
   const copyRequestLink = async () => {

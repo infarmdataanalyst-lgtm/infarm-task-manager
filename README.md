@@ -11,4 +11,6 @@ npm install
 npm start
 ```
 
-PIN tim diatur lewat environment variable `REACT_APP_TEAM_PIN_SHA256` (hash SHA-256 dari PIN 6 angka). Dokumentasi struktur kode dan rencana integrasi database ada di [CLAUDE.md](CLAUDE.md).
+Database memakai Supabase. Cara menyiapkannya (akun, skrip database, PIN tim, Vercel): [docs/PANDUAN-SUPABASE.md](docs/PANDUAN-SUPABASE.md). Tanpa pengaturan Supabase, aplikasi berjalan dalam mode uji coba (data hanya di browser).
+
+Dokumentasi struktur kode: [CLAUDE.md](CLAUDE.md).

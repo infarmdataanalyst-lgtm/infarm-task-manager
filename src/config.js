@@ -35,11 +35,15 @@ export const STATUS = {
   finish: { label: "Finish", step: 4 },
 };
 
-// Hash SHA-256 dari PIN tim (6 angka). Atur lewat environment variable
-// REACT_APP_TEAM_PIN_SHA256 di Vercel. Kosong = halaman /tim tidak dikunci.
-// Catatan: selama data masih di localStorage, PIN hanya penghalang di UI.
-// Setelah Supabase terpasang, PIN wajib diverifikasi di server (lihat CLAUDE.md).
-export const TEAM_PIN_SHA256 = (process.env.REACT_APP_TEAM_PIN_SHA256 || "").trim().toLowerCase();
+// Koneksi Supabase (database bersama). Atur di Vercel → Settings → Environment Variables:
+// REACT_APP_SUPABASE_URL dan REACT_APP_SUPABASE_PUBLISHABLE_KEY (atau key lama: REACT_APP_SUPABASE_ANON_KEY).
+// Keduanya aman berada di browser; keamanan data diatur oleh aturan di supabase/schema.sql.
+export const SUPABASE_URL = (process.env.REACT_APP_SUPABASE_URL || "").trim();
+export const SUPABASE_KEY = (process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || "").trim();
 
-// Mode penyimpanan saat ini. "local" = localStorage browser (sementara, sebelum Supabase).
-export const STORAGE_MODE = "local";
+// "supabase" kalau koneksi di atas diatur; selain itu "local" = localStorage browser (mode uji coba).
+export const STORAGE_MODE = SUPABASE_URL && SUPABASE_KEY ? "supabase" : "local";
+
+// Khusus mode lokal: hash SHA-256 dari PIN tim (REACT_APP_TEAM_PIN_SHA256). Kosong = /tim tidak dikunci.
+// Di mode Supabase, PIN diatur lewat supabase/set-pin.sql dan dicek di server.
+export const TEAM_PIN_SHA256 = (process.env.REACT_APP_TEAM_PIN_SHA256 || "").trim().toLowerCase();

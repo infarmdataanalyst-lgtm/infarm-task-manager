@@ -41,7 +41,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban sampai selesai.
     - PIN harus ditegakkan di server, bukan hanya di UI, karena anon key Supabase bisa dipakai langsung. Peran `anon` hanya boleh `SELECT` task dan `INSERT` request baru.
     - Semua perubahan dari board (assign, pindah status, edit, hapus, checklist, link hasil) lewat fungsi RPC Postgres (`security definer`) yang memverifikasi hash PIN.
 
-Alur di atas sudah diterapkan di kode (Tahap 1), kecuali bagian yang butuh database: data masih per browser.
+Alur di atas sudah diterapkan di kode. Database bersama memakai Supabase (aktif kalau environment variable Supabase diatur; lihat docs/PANDUAN-SUPABASE.md).
 
 ## Tech stack
 
@@ -50,7 +50,7 @@ Alur di atas sudah diterapkan di kode (Tahap 1), kecuali bagian yang butuh datab
 - React Router 6 (path asli; rewrite SPA di `vercel.json`)
 - Ikon: `lucide-react` (sesuai design system Infarm)
 - Styling: `src/styles.css` dengan CSS variables dari design system Infarm (brand-primary `#00843b`, brand-surface `#f5ffef`, Montserrat untuk heading, Geist untuk teks). Breakpoint HP: 720px.
-- Penyimpanan: **sementara** `localStorage` (key `infarm_tasks_v6`) lewat `src/data/taskStore.js`. Rencana: Supabase.
+- Penyimpanan: **Supabase** (`@supabase/supabase-js`: tabel `tasks`, Storage bucket `references`, Realtime) bila `REACT_APP_SUPABASE_URL` + key diatur; kalau tidak, **mode uji coba** `localStorage` (key `infarm_tasks_v6`). Pemilihan otomatis di `src/data/taskStore.js`.
 - `api/request.js`: Vercel Serverless Function lama untuk Google Apps Script. Tidak dipakai frontend dan tidak menyimpan data.
 
 ## Perintah
@@ -63,7 +63,11 @@ npm run build    # build produksi ke /build (CI=true: warning ESLint dianggap er
 
 Environment variable (atur di Vercel → Settings → Environment Variables):
 
-- `REACT_APP_TEAM_PIN_SHA256`: hash SHA-256 dari PIN tim 6 angka. Buat dengan `printf 123456 | sha256sum`. Kosong = `/tim` tidak dikunci (muncul peringatan di board).
+- `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_PUBLISHABLE_KEY` (atau `REACT_APP_SUPABASE_ANON_KEY`): koneksi Supabase. Keduanya aman di browser. Jangan pernah memakai secret/service_role key di frontend.
+- PIN tim (mode Supabase): diatur di database lewat `supabase/set-pin.sql`, dicek di server.
+- `REACT_APP_TEAM_PIN_SHA256`: hanya untuk mode uji coba (hash SHA-256 PIN, `printf 123456 | sha256sum`).
+
+Langkah lengkap menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md`.
 
 Belum ada test otomatis. Uji manual minimal: kirim request bergambar + link, Ambil, Mulai, Finish (wajib link), Revisi, cek halaman status, cek tampilan HP (lebar 390px).
 
@@ -77,8 +81,14 @@ src/index.js               entry: BrowserRouter + styles.css
 src/App.js                 routing + redirect link lama "/#/request"
 src/config.js              DESIGNERS (nama + warna), CATEGORIES, DIVISIONS, STATUS, PIN hash, STORAGE_MODE
 src/styles.css             semua style (token Infarm, komponen, responsive)
+supabase/schema.sql        skema database, aturan akses (RLS), fungsi RPC tim (cek PIN), bucket Storage, Realtime. Idempotent.
+supabase/set-pin.sql       atur/ganti PIN tim (disimpan sebagai hash)
+docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Vercel
 src/data/
-  taskStore.js             CRUD task (async) + migrasi v5→v6 + sinkron antar tab. SATU-SATUNYA file yang menyimpan data task (localStorage).
+  taskStore.js             pintu masuk data: memilih supabaseStore atau localStore sesuai STORAGE_MODE
+  supabaseStore.js         CRUD via Supabase (select/insert publik, update/delete lewat RPC ber-PIN), upload/hapus gambar, Realtime
+  localStore.js            CRUD via localStorage (mode uji coba) + migrasi v5→v6 + sinkron antar tab
+  taskModel.js             normalizeTask, pemetaan field camelCase ↔ kolom snake_case (fromRow/toRow)
   taskActions.js           aksi alur kerja (submitRequest, assignTask, startTask, finishTask, reviseTask, checklist, ...)
   useTasks.js              hook React: daftar task yang ikut berubah otomatis
 src/lib/
@@ -86,7 +96,7 @@ src/lib/
   images.js                kompres gambar (maks 1600px, JPEG 0.8), fmtBytes, newId
   links.js                 normalizeUrl (tambah https:// otomatis), displayUrl
   csv.js                   export CSV (escape RFC 4180 + BOM untuk Excel)
-  pin.js                   cek PIN (SHA-256), ingat di localStorage/sessionStorage
+  pin.js                   PIN tim: cek ke server (mode Supabase) atau hash lokal; simpan PIN di browser untuk dikirim ke RPC
 src/components/
   ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Stepper, Modal, Lightbox,
                            ReferenceList, useToast, useAction
@@ -111,7 +121,7 @@ src/pages/
   dueDate: "YYYY-MM-DD",
   status: "request" | "todo" | "on_progress" | "finish",
   pic: "Denny" | "Arum" | null,     // wajib ada mulai status todo
-  referenceImages: [{ id, name, size /* byte */, dataUrl }],   // nanti: url Supabase Storage, bukan dataUrl
+  referenceImages: [{ id, name, size /* byte */, path, url }],  // Supabase Storage (mode lokal: dataUrl)
   referenceLinks: [{ id, url }],
   resultLinks: [{ id, url }],       // wajib ≥1 saat finish
   checklist: [{ id, text, done, assignee }],
@@ -141,7 +151,8 @@ Mockup final: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu (catatan hijau "
 
 ## Pola dan konvensi kode
 
-- Komponen tidak pernah menyentuh localStorage: baca lewat `useTasks()`, ubah lewat fungsi di `taskActions.js`.
+- Komponen tidak pernah memanggil Supabase/localStorage langsung: baca lewat `useTasks()`, ubah lewat fungsi di `taskActions.js`.
+- Kolom baru di task: tambah di `schema.sql` (tabel + `team_update_task`), `taskModel.js` (`normalizeTask`, `COLUMNS`), lalu UI.
 - Aksi dijalankan lewat `useAction(showToast)` → `run(() => aksi(...), "pesan sukses")`. Error (mis. penyimpanan penuh) otomatis jadi toast, dan data di layar tidak berubah.
 - `taskStore` memperbarui cache hanya SETELAH penulisan berhasil.
 - Desainer baru: tambah di `DESIGNERS` (`config.js`). Semua tombol Ambil, filter, checklist, dan analitik ikut otomatis.
@@ -150,15 +161,16 @@ Mockup final: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu (catatan hijau "
 
 ## Masalah yang diketahui
 
-- **Data belum dibagi antar perangkat** (localStorage). Request dari perangkat requester belum sampai ke tim desain. Banner "Mode uji coba" tampil di semua halaman selama `STORAGE_MODE === "local"`.
-- **PIN baru penghalang di UI.** Hash PIN ada di bundle JavaScript; tegakkan di server setelah Supabase.
-- **Kapasitas localStorage sekitar 5 MB.** Gambar sudah dikompres, dan saat penuh muncul pesan jelas tanpa kehilangan data.
+- **Mode uji coba** (tanpa env Supabase): data hanya di browser; banner "Mode uji coba" tampil; PIN hanya penghalang di UI.
+- **Daftar task dibatasi 500 terbaru** (`LIST_LIMIT` di `supabaseStore.js`). Tambahkan paginasi bila task lebih banyak.
+- **Realtime mengambil ulang seluruh daftar** setiap ada perubahan (diberi jeda 300 ms). Cukup untuk volume tim; optimalkan bila daftar membesar.
+- **PIN 6 angka** bisa ditebak dengan banyak percobaan; server memberi jeda 1 detik per PIN salah. Ganti PIN bila curiga bocor.
+- **File gambar yatim** bisa tersisa jika upload berhasil tapi simpan task gagal. Aman diabaikan atau dibersihkan manual di Storage.
 
-## Integrasi database (berikutnya: Supabase Free)
+## Integrasi Supabase (sudah di kode)
 
-1. Tabel `tasks` dengan kolom sesuai model v6 (array → `jsonb` atau tabel anak). Bucket Storage `references` untuk gambar (upload dengan `cacheControl: "31536000"`, simpan URL).
-2. Ganti isi `src/data/taskStore.js` dengan Supabase client; tanda tangan fungsinya tetap sama (`listTasks`, `getTask`, `subscribe`, `createTask`, `updateTask`, `deleteTask`). `subscribe` → Supabase Realtime.
-3. Board hanya mengambil task yang belum Finish + Finish 30 hari terakhir. Task lama dimuat saat dibutuhkan (hemat egress).
-4. RLS: `anon` hanya `SELECT` dan `INSERT` (status `request`). Aksi di `taskActions.js` (selain `submitRequest`) jadi fungsi RPC `security definer` yang menerima PIN dan mencocokkan hash di server.
-5. `finishTask` dengan `deleteReferenceImages`: hapus file di Storage juga, bukan hanya URL-nya.
-6. Ubah `STORAGE_MODE` di `config.js` menjadi `"supabase"` supaya banner "Mode uji coba" hilang.
+- Requester (`anon`): `SELECT` semua task, `INSERT` request baru bersih (status `request`, tanpa PIC/hasil/checklist), upload gambar ke `references/<id task>/<file>.jpg` (`cacheControl` 1 tahun).
+- Tim: semua perubahan lewat `team_update_task(p_pin, p_id, p_patch)` dan `team_delete_task(p_pin, p_id)`; PIN dicocokkan dengan hash di `app_settings` (tidak bisa dibaca dari browser). PIN salah → error `invalid_pin` → aplikasi kembali ke layar PIN.
+- Constraint database: `tasks_pic_wajib` (status selain request wajib PIC), `tasks_link_hasil_wajib` (finish wajib link hasil).
+- Gambar referensi hanya bisa dihapus bila task sudah Finish atau sudah dihapus (policy Storage).
+- Uji SQL lokal: Postgres 16 + stub role `anon`/`authenticated`, schema `storage`, publication `supabase_realtime`.
