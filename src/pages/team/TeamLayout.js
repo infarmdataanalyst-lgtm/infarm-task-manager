@@ -50,10 +50,10 @@ function PinScreen({ onUnlocked }) {
 
   return (
     <main className="pin-page">
-      <div style={{ width: "100%", maxWidth: 420 }} className="stack-lg">
-        <form className="card card-pad-lg stack-lg" style={{ padding: "28px 24px", boxShadow: "var(--shadow-lg)" }} onSubmit={submit}>
+      <div style={{ width: "100%", maxWidth: 400 }} className="stack">
+        <form className="card card-pad-lg stack-lg" style={{ padding: "24px 20px", boxShadow: "var(--shadow-lg)" }} onSubmit={submit}>
           <div className="stack" style={{ alignItems: "center", textAlign: "center" }}>
-            <span className="brand-logo" style={{ width: 56, height: 56, border: "1px solid var(--brand-light)", background: "var(--brand-surface)" }}>
+            <span className="brand-logo" style={{ width: 48, height: 48, border: "1px solid var(--brand-light)", background: "var(--brand-surface)" }}>
               <img src="/logo-infarm.png" alt="Logo Infarm" />
             </span>
             <h1 className="h-page">Board tim desain</h1>
@@ -133,7 +133,7 @@ export default function TeamLayout() {
           </p>
         )}
         <LocalModeBanner />
-        <nav className="tabs" aria-label="Tampilan" style={{ alignSelf: "flex-start" }}>
+        <nav className="tabs" aria-label="Tampilan">
           <Link to="/tim" className={`tab ${onAnalytics ? "" : "active"}`} aria-current={onAnalytics ? undefined : "page"}>
             Kanban
           </Link>

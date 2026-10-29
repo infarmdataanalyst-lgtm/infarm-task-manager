@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react";
 import { ArrowRight, Check, ExternalLink, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { CATEGORIES, DESIGNERS, DIVISIONS } from "../../config";
 import * as actions from "../../data/taskActions";
-import { daysLate, dueSoonLabel, fmtDateTime, fmtDay, isDueSoon, isOverdue } from "../../lib/dates";
+import { daysLate, dueSoonLabel, fmtDate, fmtDay, isDueSoon, isOverdue } from "../../lib/dates";
 import { displayUrl, normalizeUrl } from "../../lib/links";
 import { newId } from "../../lib/images";
-import { Avatar, Modal, ReferenceList, StatusBadge, Stepper } from "../../components/ui";
+import { Avatar, Modal, ReferenceList, StatusBadge, Stepper, referenceSummary } from "../../components/ui";
 
 function EditForm({ task, run, busy, onDone }) {
   const [f, setF] = useState({
@@ -145,10 +145,12 @@ function ResultLinks({ task, run }) {
 export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [changingPic, setChangingPic] = useState(false);
 
   useEffect(() => {
     setEditing(false);
     setConfirmDelete(false);
+    setChangingPic(false);
   }, [task.id]);
 
   useEffect(() => {
@@ -177,7 +179,7 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
             </button>
           </div>
           <h2 id="detail-title" className="h-section">{task.title}</h2>
-          <p className="small muted">{task.category} · dikirim {fmtDateTime(task.createdAt)}</p>
+          <p className="small muted">{task.category} · dikirim {fmtDate(task.createdAt)}</p>
           <Stepper status={task.status} />
         </div>
 
@@ -192,19 +194,38 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
                 <div>
                   <dt>PIC</dt>
                   <dd className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                    {task.pic && <Avatar name={task.pic} size={22} />}
-                    {task.status === "request" ? (
-                      <span>Belum ada</span>
-                    ) : (
-                      <select className="select" style={{ minHeight: 32, padding: "0 6px", fontWeight: 600 }} aria-label="Ganti PIC" value={task.pic || ""} onChange={(e) => run(() => actions.changePic(task.id, e.target.value), `PIC diganti ke ${e.target.value}.`)}>
-                        {DESIGNERS.map((d) => <option key={d.name}>{d.name}</option>)}
+                    {task.pic && <Avatar name={task.pic} size={20} />}
+                    {changingPic && task.status !== "request" ? (
+                      <select
+                        className="select"
+                        style={{ minHeight: 30, padding: "0 6px", fontWeight: 600 }}
+                        aria-label="Ganti PIC"
+                        autoFocus
+                        value={task.pic || ""}
+                        onBlur={() => setChangingPic(false)}
+                        onChange={async (e) => {
+                          const v = e.target.value;
+                          setChangingPic(false);
+                          if (v === "__release") await run(() => actions.backToRequest(task.id), "PIC dilepas, task kembali ke Request.");
+                          else await run(() => actions.changePic(task.id, v), `PIC diganti ke ${v}.`);
+                        }}
+                      >
+                        {DESIGNERS.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                        <option value="__release">Lepas PIC (kembali ke Request)</option>
                       </select>
+                    ) : (
+                      <>
+                        <span className="grow">{task.pic || "Belum ada"}</span>
+                        {task.status !== "request" && (
+                          <button type="button" className="btn btn-text btn-sm" style={{ minHeight: 24, padding: "0 4px" }} onClick={() => setChangingPic(true)}>Ganti</button>
+                        )}
+                      </>
                     )}
                   </dd>
                 </div>
                 <div>
                   <dt>{task.status === "finish" ? "Selesai" : "Mulai dikerjakan"}</dt>
-                  <dd>{fmtDateTime(task.status === "finish" ? task.finishedAt : task.startedAt)}</dd>
+                  <dd>{fmtDate(task.status === "finish" ? task.finishedAt : task.startedAt)}</dd>
                 </div>
               </dl>
               <section className="stack">
@@ -217,10 +238,12 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
           <section className="stack">
             <div className="row-between">
               <h3 className="eyebrow">Referensi dari requester</h3>
-              {task.status === "finish" && task.referenceImages.length > 0 && (
+              {task.status === "finish" && task.referenceImages.length > 0 ? (
                 <button type="button" className="btn btn-danger-text btn-sm" onClick={() => run(() => actions.deleteReferenceImages(task.id), "Gambar referensi dihapus.")}>
                   <Trash2 size={14} aria-hidden="true" /> Hapus gambar
                 </button>
+              ) : (
+                <span className="small muted">{referenceSummary(task)}</span>
               )}
             </div>
             <ReferenceList task={task} />
@@ -235,41 +258,34 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
         </div>
 
         <div className="drawer-foot">
-          {task.status === "request" &&
-            DESIGNERS.map((d, i) => (
-              <button key={d.name} type="button" className={`btn ${i % 2 ? "btn-outline-soil" : "btn-outline"} grow`} disabled={busy} onClick={() => run(() => actions.assignTask(task.id, d.name), `Diambil ${d.name}.`)}>
-                Ambil: {d.name}
-              </button>
-            ))}
+          {task.status === "request" && (
+            <div className="grid-2 keep" style={{ width: "100%", gap: 8 }}>
+              {DESIGNERS.map((d, i) => (
+                <button key={d.name} type="button" className={`btn btn-lg ${i % 2 ? "btn-outline-soil" : "btn-outline"}`} disabled={busy} onClick={() => run(() => actions.assignTask(task.id, d.name), `Diambil ${d.name}.`)}>
+                  Ambil: {d.name}
+                </button>
+              ))}
+            </div>
+          )}
           {task.status === "todo" && (
-            <>
-              <button type="button" className="btn btn-primary btn-cta grow" disabled={busy} onClick={() => run(() => actions.startTask(task.id))}>
-                Mulai kerjakan <ArrowRight size={18} aria-hidden="true" />
-              </button>
-              <button type="button" className="btn btn-text" onClick={() => run(() => actions.backToRequest(task.id), "Dikembalikan ke Request.")}>
-                Lepas PIC, kembali ke Request
-              </button>
-            </>
+            <button type="button" className="btn btn-primary btn-cta btn-block" disabled={busy} onClick={() => run(() => actions.startTask(task.id))}>
+              <ArrowRight size={18} aria-hidden="true" /> Mulai kerjakan
+            </button>
           )}
           {task.status === "on_progress" && (
-            <>
-              <button type="button" className="btn btn-primary btn-cta grow" disabled={busy} onClick={() => onFinish(task)}>
-                <Check size={18} aria-hidden="true" /> Selesai, kirim link hasil
-              </button>
-              <button type="button" className="btn btn-text" onClick={() => run(() => actions.backToTodo(task.id))}>Kembali ke Todo</button>
-            </>
+            <button type="button" className="btn btn-primary btn-cta btn-block" disabled={busy} onClick={() => onFinish(task)}>
+              <Check size={18} aria-hidden="true" /> Selesai, kirim link hasil
+            </button>
           )}
           {task.status === "finish" && (
-            <button type="button" className="btn btn-secondary grow" disabled={busy} onClick={() => run(() => actions.reviseTask(task.id), "Task kembali ke On Progress untuk revisi.")}>
-              <RotateCcw size={16} aria-hidden="true" /> Revisi: kembali ke On Progress
+            <button type="button" className="btn btn-primary btn-cta btn-block" disabled={busy} onClick={() => run(() => actions.reviseTask(task.id), "Task kembali ke On Progress untuk revisi.")}>
+              <RotateCcw size={18} aria-hidden="true" /> Revisi: kembali ke On Progress
             </button>
           )}
           <div className="row" style={{ width: "100%", justifyContent: "space-between" }}>
-            {!editing && (
-              <button type="button" className="btn btn-secondary" onClick={() => setEditing(true)}>
-                <Pencil size={16} aria-hidden="true" /> Edit
-              </button>
-            )}
+            <button type="button" className="btn btn-secondary" disabled={editing} onClick={() => setEditing(true)}>
+              <Pencil size={16} aria-hidden="true" /> Edit
+            </button>
             <button type="button" className="btn btn-danger-text" onClick={() => setConfirmDelete(true)}>
               <Trash2 size={16} aria-hidden="true" /> Hapus task
             </button>

@@ -7,10 +7,10 @@ import { STATUS, STATUSES, STORAGE_MODE, designerColor } from "../config";
 import { displayUrl } from "../lib/links";
 import { fmtBytes } from "../lib/images";
 
-export function AppHeader({ title, subtitle, to = "/", children }) {
+export function AppHeader({ title, subtitle, to = "/", narrow = false, children }) {
   return (
     <header className="app-header">
-      <div className="container">
+      <div className={`container ${narrow ? "container-narrow" : ""}`}>
         <Link to={to} className="brand">
           <span className="brand-logo">
             <img src="/logo-infarm.png" alt="Logo Infarm" />
@@ -181,7 +181,7 @@ export function ReferenceList({ task }) {
 export const referenceSummary = (task) => {
   const parts = [];
   if (task.referenceImages.length) parts.push(`${task.referenceImages.length} gambar`);
+  else if (task.referenceImagesDeletedAt) parts.push("gambar sudah dihapus");
   if (task.referenceLinks.length) parts.push(`${task.referenceLinks.length} link`);
-  if (!parts.length && task.referenceImagesDeletedAt) return "gambar sudah dihapus";
-  return parts.join(" · ") || "tidak ada";
+  return parts.join(" · ") || "tanpa referensi";
 };

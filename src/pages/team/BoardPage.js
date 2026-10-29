@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { DESIGNERS, STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
 import { daysBetween, isOverdue, parseDay, today } from "../../lib/dates";
-import { Avatar, StatusBadge, useAction } from "../../components/ui";
+import { Avatar, useAction } from "../../components/ui";
 import TaskCard from "./TaskCard";
 import TaskDetail from "./TaskDetail";
 import FinishDialog from "./FinishDialog";
@@ -117,7 +117,7 @@ export default function BoardPage() {
         ))}
       </section>
 
-      <div className="row" style={{ gap: 10 }}>
+      <div className="row filter-bar" style={{ gap: 10 }}>
         <label className="search">
           <Search size={16} aria-hidden="true" />
           <span className="sr-only">Cari task</span>
@@ -129,10 +129,10 @@ export default function BoardPage() {
             <button key={d.name} type="button" className="pill" aria-pressed={pic === d.name} onClick={() => setPic(d.name)}>{d.name}</button>
           ))}
         </div>
-        <label className="row small muted" style={{ gap: 6 }}>
-          Deadline
-          <select className="select" style={{ width: "auto" }} value={due} onChange={(e) => setDue(e.target.value)}>
-            <option value="all">Semua</option>
+        <label className="row small muted filter-select" style={{ gap: 6 }}>
+          <span className="hide-mobile">Deadline</span>
+          <select className="select" aria-label="Filter deadline" value={due} onChange={(e) => setDue(e.target.value)}>
+            <option value="all">Semua deadline</option>
             <option value="today">Hari ini</option>
             <option value="week">7 hari ke depan</option>
             <option value="overdue">Terlambat</option>
@@ -157,8 +157,8 @@ export default function BoardPage() {
         {columns.map((c) => (
           <div key={c.status} className={`card column ${activeCol === c.status ? "active" : ""}`}>
             <div className="column-head">
-              <span className="row" style={{ gap: 8 }}>
-                <StatusBadge status={c.status} />
+              <span>
+                <span style={{ fontWeight: 600 }}>{STATUS[c.status].label}</span>{" "}
                 {COLUMN_NOTE[c.status] && <span className="small muted">{COLUMN_NOTE[c.status]}</span>}
               </span>
               <span style={{ fontWeight: 600, color: "var(--zinc-700)" }}>{c.items.length}</span>

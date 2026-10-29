@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Send } from "lucide-react";
+import { Check, LayoutList, Send } from "lucide-react";
 import { CATEGORIES, DIVISIONS } from "../config";
 import { submitRequest } from "../data/taskActions";
 import { getTask } from "../data/taskStore";
@@ -62,43 +62,37 @@ export default function RequestPage() {
 
   return (
     <>
-      <AppHeader title="Request desain" subtitle="Kirim kebutuhan desain ke Tim Desain infarm.id">
-        <Link to="/" className="btn btn-on-green">
+      <AppHeader title="Request desain" subtitle="Kirim kebutuhan desain ke Tim Desain infarm.id" narrow>
+        <Link to="/" className="btn btn-on-green" aria-label="Lihat status semua request">
+          <LayoutList size={16} aria-hidden="true" />
           <span className="btn-label">Lihat status semua request</span>
-          <ArrowRight size={16} aria-hidden="true" />
         </Link>
       </AppHeader>
 
       {sent ? (
         <main className="container container-form page">
-          <div className="row" style={{ gap: 16, flexWrap: "nowrap", alignItems: "center" }}>
-            <span className="success-icon"><Check size={28} strokeWidth={2.5} aria-hidden="true" /></span>
+          <div className="row" style={{ gap: 14, flexWrap: "nowrap", alignItems: "center" }}>
+            <span className="success-icon"><Check size={24} strokeWidth={2.5} aria-hidden="true" /></span>
             <div>
               <h1 className="h-page">Request sudah masuk</h1>
               <p style={{ color: "var(--zinc-700)" }}>Tersimpan di sistem tim desain. Cek di bawah apakah referensimu terbaca dengan benar.</p>
             </div>
           </div>
-          <section className="card card-pad-lg stack-lg">
-            <div className="row-between">
-              <span className="row">
-                <StatusBadge status={sent.status} />
-                <span className="small" style={{ color: "var(--zinc-700)" }}>Menunggu diambil Denny atau Arum</span>
-              </span>
-              <span className="small muted">Dikirim {fmtDateTime(sent.createdAt)}</span>
+          <section className="card req-card">
+            <div className="card-top">
+              <StatusBadge status={sent.status} />
+              <span className="card-due">Deadline {fmtDay(sent.dueDate)}</span>
             </div>
-            <div>
-              <h2 className="h-section">{sent.title}</h2>
-              <p className="small muted">
-                {sent.category} · {sent.requesterName} ({sent.division}) · deadline {fmtDay(sent.dueDate)}
-              </p>
-            </div>
-            <div className="stack" style={{ borderTop: "1px solid var(--zinc-100)", paddingTop: 14 }}>
-              <p className="label">Referensi yang kami terima</p>
+            <h2 className="req-title">{sent.title}</h2>
+            <p className="small muted">{sent.category} · {sent.requesterName} ({sent.division}) · dikirim {fmtDateTime(sent.createdAt)}</p>
+            <p className="small" style={{ color: "var(--zinc-700)" }}>Sudah masuk. Menunggu diambil Denny atau Arum.</p>
+            <div className="req-detail">
+              <p className="eyebrow">Referensi yang diterima tim desain</p>
               <ReferenceList task={sent} />
               <p className="hint">Ada yang kurang? Kabari tim desain, atau kirim request baru.</p>
             </div>
           </section>
-          <div className="row">
+          <div className="row sent-actions">
             <Link to="/" className="btn btn-primary btn-cta">Lihat di halaman status</Link>
             <button type="button" className="btn btn-secondary btn-lg" onClick={reset}>
               Kirim request lain

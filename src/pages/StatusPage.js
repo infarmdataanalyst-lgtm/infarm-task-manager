@@ -31,7 +31,7 @@ export default function StatusPage() {
   const [openId, setOpenId] = useState(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
 
-  // Pencarian & divisi dulu, supaya angka di tab status ikut menyesuaikan.
+  // Pencarian & divisi dulu, supaya angka di tombol status ikut menyesuaikan.
   const matched = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks
@@ -45,31 +45,28 @@ export default function StatusPage() {
 
   return (
     <>
-      <AppHeader title="Status request desain" subtitle="Semua request ke Tim Desain. Cek apakah request kamu sudah masuk dan sampai mana progresnya.">
-        <Link to="/request" className="btn btn-on-green btn-cta" aria-label="Buat request baru">
-          <Plus size={18} aria-hidden="true" />
+      <AppHeader title="Status request desain" subtitle="Cek request kamu sudah masuk dan sampai mana progresnya" narrow>
+        <Link to="/request" className="btn btn-on-green" aria-label="Buat request baru">
+          <Plus size={16} aria-hidden="true" />
           <span className="btn-label">Buat request baru</span>
         </Link>
       </AppHeader>
 
-      <main className="container container-narrow page">
+      <main className="container container-narrow page" style={{ gap: 14 }}>
         <LocalModeBanner />
-        <div className="row" style={{ gap: 10 }}>
-          <label className="search">
+        <div className="row" style={{ gap: 8 }}>
+          <label className="search" style={{ maxWidth: "none" }}>
             <Search size={16} aria-hidden="true" />
             <span className="sr-only">Cari request</span>
             <input type="search" placeholder="Cari nama kamu atau judul request" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <label className="row small muted" style={{ gap: 6 }}>
-            Divisi
-            <select className="select" style={{ width: "auto" }} value={division} onChange={(e) => setDivision(e.target.value)}>
-              <option value="all">Semua divisi</option>
-              {DIVISIONS.map((d) => <option key={d}>{d}</option>)}
-            </select>
-          </label>
+          <select className="select" style={{ width: "auto", flex: "0 1 180px" }} aria-label="Divisi" value={division} onChange={(e) => setDivision(e.target.value)}>
+            <option value="all">Semua divisi</option>
+            {DIVISIONS.map((d) => <option key={d}>{d}</option>)}
+          </select>
         </div>
 
-        <nav className="pills" aria-label="Filter status">
+        <nav className="pills scroll-row" aria-label="Filter status">
           <button type="button" className="pill" aria-pressed={status === "all"} onClick={() => setStatus("all")}>
             Semua <span className="count">{matched.length}</span>
           </button>
@@ -79,7 +76,6 @@ export default function StatusPage() {
             </button>
           ))}
         </nav>
-        {query.trim() && <p className="small muted" style={{ marginTop: -6 }}>{visible.length} request cocok dengan "{query.trim()}"</p>}
 
         <section aria-label="Daftar request" className="stack" style={{ gap: 10 }}>
           {loading && <p className="muted">Memuat…</p>}
@@ -91,50 +87,41 @@ export default function StatusPage() {
           )}
           {visible.slice(0, limit).map((t) => {
             const open = openId === t.id;
+            const late = isOverdue(t);
             return (
               <article key={t.id} className={`card req-card ${open ? "open" : ""}`}>
-                <div className="req-main">
-                  <div className="req-title">
-                    <h2>{t.title}</h2>
-                    <p className="small muted">{t.category} · {t.requesterName} ({t.division}) · dikirim {fmtShort(t.createdAt)}</p>
-                  </div>
-                  <div className="req-progress">
-                    <Stepper status={t.status} showLabels={false} />
-                    <div className="row" style={{ gap: 6 }}>
-                      <StatusBadge status={t.status} />
-                      <span className="small" style={{ color: "var(--zinc-700)" }}>{statusNote(t)}</span>
-                    </div>
-                  </div>
-                  <div className="req-due">
-                    <p className="small muted">Deadline</p>
-                    <p style={{ fontWeight: 600, color: isOverdue(t) ? "var(--rose-700)" : undefined }}>{fmtDay(t.dueDate)}</p>
-                  </div>
-                  <div className="req-actions">
-                    {t.status === "finish" &&
-                      t.resultLinks.map((l, i) => (
-                        <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
-                          <ExternalLink size={16} aria-hidden="true" />
-                          {t.resultLinks.length > 1 ? `Hasil desain ${i + 1}` : "Buka hasil desain"}
-                        </a>
-                      ))}
-                    <button type="button" className="btn btn-secondary btn-sm" aria-expanded={open} onClick={() => setOpenId(open ? null : t.id)}>
-                      <ImageIcon size={16} aria-hidden="true" />
-                      {open ? "Sembunyikan referensi" : `Referensi: ${referenceSummary(t)}`}
-                    </button>
-                  </div>
+                <div className="card-top">
+                  <StatusBadge status={t.status} />
+                  {late && <span className="badge badge-late">Terlambat</span>}
+                  <span className="card-due" style={{ color: late ? "var(--rose-700)" : undefined }}>Deadline {fmtDay(t.dueDate)}</span>
                 </div>
+                <h2 className="req-title">{t.title}</h2>
+                <p className="small muted">{t.category} · {t.requesterName} ({t.division}) · dikirim {fmtShort(t.createdAt)}</p>
+                <Stepper status={t.status} showLabels={false} />
+                <p className="small" style={{ color: "var(--zinc-700)" }}>{statusNote(t)}</p>
+
                 {open && (
                   <div className="req-detail">
-                    <div>
-                      <p className="eyebrow">Referensi yang diterima tim desain</p>
-                      <ReferenceList task={t} />
-                    </div>
-                    <div>
-                      <p className="eyebrow">Brief</p>
-                      <p style={{ color: "var(--zinc-700)", whiteSpace: "pre-line" }}>{t.description || "Tidak ada brief."}</p>
-                    </div>
+                    <p className="eyebrow">Referensi yang diterima tim desain</p>
+                    <ReferenceList task={t} />
+                    <p className="eyebrow">Brief</p>
+                    <p style={{ color: "var(--zinc-700)", whiteSpace: "pre-line" }}>{t.description || "Tidak ada brief."}</p>
                   </div>
                 )}
+
+                <div className="req-actions">
+                  {t.status === "finish" &&
+                    t.resultLinks.map((l, i) => (
+                      <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
+                        <ExternalLink size={16} aria-hidden="true" />
+                        {t.resultLinks.length > 1 ? `Hasil desain ${i + 1}` : "Buka hasil desain"}
+                      </a>
+                    ))}
+                  <button type="button" className="btn btn-secondary" aria-expanded={open} onClick={() => setOpenId(open ? null : t.id)}>
+                    <ImageIcon size={16} aria-hidden="true" />
+                    {open ? "Sembunyikan referensi" : `Referensi: ${referenceSummary(t)}`}
+                  </button>
+                </div>
               </article>
             );
           })}

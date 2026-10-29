@@ -86,7 +86,7 @@ export default function ReferenceEditor({ images, links, onImagesChange, onLinks
           }}
         />
         {images.length > 0 && (
-          <div className="ref-grid">
+          <div className="ref-grid two">
             {images.map((img) => (
               <div key={img.id} className="ref-thumb">
                 <img src={img.dataUrl} alt="" />

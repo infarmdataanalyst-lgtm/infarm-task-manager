@@ -82,9 +82,9 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <div className="row" style={{ gap: 8 }}>
-        <span className="small muted">Periode:</span>
-        <div className="pills" role="group" aria-label="Periode">
+      <div className="row period-bar" style={{ gap: 8 }}>
+        <span className="small muted hide-mobile">Periode:</span>
+        <div className="pills scroll-row" role="group" aria-label="Periode">
           {PERIODS.map(([key, label]) => (
             <button key={key} type="button" className="pill" aria-pressed={period === key} onClick={() => setPeriod(key)}>{label}</button>
           ))}
@@ -99,11 +99,11 @@ export default function AnalyticsPage() {
           </span>
         )}
       </div>
-      <p className="small muted" style={{ marginTop: -6 }}>
+      <p className="small muted" style={{ marginTop: -10 }}>
         {fmtShort(range.from)} – {fmtShort(range.to)}. Request masuk dihitung dari tanggal kirim, task selesai dari tanggal pindah ke Finish.
       </p>
 
-      <section aria-label="Ringkasan periode" className="stats" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+      <section aria-label="Ringkasan periode" className="stats">
         {data.kpis.map((k) => (
           <div key={k.label} className="card stat">
             <p className="small muted">{k.label}</p>
@@ -116,20 +116,14 @@ export default function AnalyticsPage() {
       <section aria-label="Per desainer" className="grid-auto-340">
         {data.pics.map((p) => (
           <div key={p.name} className="card card-pad stack-lg">
-            <div className="row" style={{ gap: 12, flexWrap: "nowrap" }}>
-              <Avatar name={p.name} size={44} />
+            <div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
+              <Avatar name={p.name} size={32} />
               <div>
                 <h2 className="h-section">{p.name}</h2>
-                <p className="small muted">{p.note}</p>
+                <p className="small muted">{p.active} task aktif · {p.note}</p>
               </div>
             </div>
-            <div>
-              <div className="row-between small" style={{ marginBottom: 4 }}>
-                <span style={{ fontWeight: 600 }}>Beban kerja saat ini</span>
-                <span className="muted">{p.active} task aktif</span>
-              </div>
-              <div className="bar-track" aria-hidden="true"><div style={{ width: `${Math.round((p.active / maxActive) * 100)}%`, background: p.color }} /></div>
-            </div>
+            <div className="bar-track" aria-hidden="true"><div style={{ width: `${Math.round((p.active / maxActive) * 100)}%`, background: p.color }} /></div>
             <dl className="pic-stats">
               {p.stats.map((s) => (
                 <div key={s.label}><dt>{s.label}</dt><dd style={{ color: s.color }}>{s.value}</dd></div>
