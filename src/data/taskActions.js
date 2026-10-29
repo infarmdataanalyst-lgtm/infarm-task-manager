@@ -1,13 +1,26 @@
-// Aksi alur kerja tim desain. Setiap fungsi di sini nantinya menjadi satu
-// fungsi RPC Supabase yang memverifikasi PIN tim di server.
+// Aksi alur kerja. Di mode Supabase, aksi tim berjalan lewat fungsi RPC ber-PIN
+// dan aksi requester lewat requester_update_task (lihat supabase/schema.sql).
 
-import { updateTask, deleteTask as removeTask, createTask } from "./taskStore";
-import { newId } from "../lib/images";
+import * as store from "./taskStore";
+import { REQUESTER_FIELDS } from "./taskModel";
+
+const { updateTask, createTask } = store;
 
 const now = () => new Date().toISOString();
 
-// Requester (tanpa PIN): hanya boleh membuat request baru.
+// ─── Requester (tanpa PIN) ──────────────────────────────────────
+
 export const submitRequest = (input) => createTask(input);
+
+// Edit request sendiri selama status Request atau Todo. Hanya field di REQUESTER_FIELDS yang dikirim.
+export const editRequest = (id, fields) => {
+  const allowed = Object.fromEntries(Object.entries(fields).filter(([k]) => REQUESTER_FIELDS.includes(k)));
+  return store.requesterUpdateTask(id, allowed);
+};
+
+export const canRequesterEdit = (task) => task.status === "request" || task.status === "todo";
+
+// ─── Tim desain (PIN) ───────────────────────────────────────────
 
 // Request → Todo, sekaligus menentukan PIC. Task tidak boleh masuk Todo tanpa PIC.
 export const assignTask = (id, pic) =>
@@ -44,19 +57,22 @@ export const reviseTask = (id) => updateTask(id, { status: "on_progress", finish
 
 export const editTask = (id, fields) => updateTask(id, fields);
 
-export const deleteTask = (id) => removeTask(id);
+export const deleteTask = (id) => store.deleteTask(id);
+
+// Tim membuka detail task: badge "Diperbarui requester" hilang.
+export const markSeen = (id) => store.markSeen(id);
+
+export const listHistory = (id) => store.listHistory(id);
 
 export const deleteReferenceImages = (id) => updateTask(id, { referenceImages: [], referenceImagesDeletedAt: now() });
 
 export const setResultLinks = (id, resultLinks) => updateTask(id, { resultLinks });
 
-// ─── Checklist ──────────────────────────────────────────────────
+// ─── Checklist: tiap item bisa dikerjakan desainer berbeda ──────
+// Setiap aksi hanya mengubah satu item, jadi centangan Denny dan Arum tidak saling menimpa.
 
-export const addChecklistItem = (id, text, assignee) =>
-  updateTask(id, (t) => ({ checklist: [...t.checklist, { id: newId(), text, done: false, assignee }] }));
+export const addChecklistItem = (id, text, assignee) => store.addChecklistItem(id, text, assignee);
 
-export const updateChecklistItem = (id, itemId, changes) =>
-  updateTask(id, (t) => ({ checklist: t.checklist.map((c) => (c.id === itemId ? { ...c, ...changes } : c)) }));
+export const updateChecklistItem = (id, itemId, changes) => store.updateChecklistItem(id, itemId, changes);
 
-export const removeChecklistItem = (id, itemId) =>
-  updateTask(id, (t) => ({ checklist: t.checklist.filter((c) => c.id !== itemId) }));
+export const removeChecklistItem = (id, itemId) => store.removeChecklistItem(id, itemId);

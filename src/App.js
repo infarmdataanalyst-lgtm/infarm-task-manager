@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import StatusPage from "./pages/StatusPage";
 import RequestPage from "./pages/RequestPage";
+import EditRequestPage from "./pages/EditRequestPage";
 import TeamLayout from "./pages/team/TeamLayout";
 import BoardPage from "./pages/team/BoardPage";
 import AnalyticsPage from "./pages/team/AnalyticsPage";
@@ -25,6 +26,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<StatusPage />} />
         <Route path="/request" element={<RequestPage />} />
+        <Route path="/request/:id/edit" element={<EditRequestPage />} />
         <Route path="/tim" element={<TeamLayout />}>
           <Route index element={<BoardPage />} />
           <Route path="task/:id" element={<BoardPage />} />

@@ -2,9 +2,11 @@
 
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, ImageIcon, Plus, Search } from "lucide-react";
+import { ExternalLink, ImageIcon, Pencil, Plus, Search } from "lucide-react";
 import { DIVISIONS, STATUS, STATUSES } from "../config";
 import { useTasks } from "../data/useTasks";
+import { canRequesterEdit } from "../data/taskActions";
+import { helpers } from "../data/taskModel";
 import { daysLate, fmtDay, fmtShort, isOverdue } from "../lib/dates";
 import { AppHeader, LocalModeBanner, ReferenceList, StatusBadge, Stepper, referenceSummary } from "../components/ui";
 
@@ -15,7 +17,7 @@ const statusNote = (t) => {
   if (t.status === "todo") return `Diambil ${t.pic}, belum mulai`;
   if (t.status === "on_progress") {
     const done = t.checklist.filter((c) => c.done).length;
-    const parts = [`Dikerjakan ${t.pic}`];
+    const parts = [`Dikerjakan ${[t.pic, ...helpers(t)].join(" & ")}`];
     if (t.checklist.length) parts.push(`checklist ${done} dari ${t.checklist.length}`);
     if (isOverdue(t)) parts.push(`lewat deadline ${daysLate(t)} hari`);
     return parts.join(" · ");
@@ -93,6 +95,7 @@ export default function StatusPage() {
                 <div className="card-top">
                   <StatusBadge status={t.status} />
                   {late && <span className="badge badge-late">Terlambat</span>}
+                  {t.requesterUpdatedAt && t.status !== "finish" && <span className="badge badge-updated">Diperbarui {fmtShort(t.requesterUpdatedAt)}</span>}
                   <span className="card-due" style={{ color: late ? "var(--rose-700)" : undefined }}>Deadline {fmtDay(t.dueDate)}</span>
                 </div>
                 <h2 className="req-title">{t.title}</h2>
@@ -121,7 +124,13 @@ export default function StatusPage() {
                     <ImageIcon size={16} aria-hidden="true" />
                     {open ? "Sembunyikan referensi" : `Referensi: ${referenceSummary(t)}`}
                   </button>
+                  {canRequesterEdit(t) && (
+                    <Link to={`/request/${t.id}/edit`} className="btn btn-outline">
+                      <Pencil size={16} aria-hidden="true" /> Edit request
+                    </Link>
+                  )}
                 </div>
+                {t.status === "on_progress" && <p className="hint">Sedang dikerjakan. Untuk perubahan, hubungi {t.pic} langsung.</p>}
               </article>
             );
           })}

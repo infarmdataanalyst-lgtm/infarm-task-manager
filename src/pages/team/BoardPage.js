@@ -5,6 +5,7 @@ import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { DESIGNERS, STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
+import { involves } from "../../data/taskModel";
 import { daysBetween, isOverdue, parseDay, today } from "../../lib/dates";
 import { Avatar, useAction } from "../../components/ui";
 import TaskCard from "./TaskCard";
@@ -52,16 +53,17 @@ export default function BoardPage() {
     ];
   }, [tasks]);
 
+  // Beban kerja: task aktif di mana desainer ini PIC atau punya item checklist yang belum selesai.
   const workload = DESIGNERS.map((d) => ({
     ...d,
-    active: tasks.filter((t) => t.pic === d.name && (t.status === "todo" || t.status === "on_progress")).length,
+    active: tasks.filter((t) => involves(t, d.name) && (t.status === "todo" || t.status === "on_progress")).length,
   }));
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter(
       (t) =>
-        (pic === "all" || t.pic === pic) &&
+        (pic === "all" || involves(t, pic)) &&
         matchesDue(t, due) &&
         (!q || [t.title, t.requesterName, t.division, t.category, t.pic].some((v) => v?.toLowerCase().includes(q)))
     );

@@ -1,10 +1,12 @@
 // Panel detail task: panel kanan di desktop, layar penuh di HP.
 
 import React, { useEffect, useState } from "react";
-import { ArrowRight, Check, ExternalLink, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, History, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { CATEGORIES, DESIGNERS, DIVISIONS } from "../../config";
 import * as actions from "../../data/taskActions";
-import { daysLate, dueSoonLabel, fmtDate, fmtDay, isDueSoon, isOverdue } from "../../lib/dates";
+import { isUpdatedByRequester } from "../../data/taskModel";
+import { describeChange } from "../../lib/changes";
+import { daysLate, dueSoonLabel, fmtDate, fmtDateTime, fmtDay, isDueSoon, isOverdue } from "../../lib/dates";
 import { displayUrl, normalizeUrl } from "../../lib/links";
 import { newId } from "../../lib/images";
 import { Avatar, Modal, ReferenceList, StatusBadge, Stepper, referenceSummary } from "../../components/ui";
@@ -59,10 +61,47 @@ function EditForm({ task, run, busy, onDone }) {
   );
 }
 
+// Edit dari requester (riwayat "diedit"), terbaru di atas.
+function RequesterChanges({ task }) {
+  const [entries, setEntries] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    actions
+      .listHistory(task.id)
+      .then((list) => alive && setEntries(list.filter((h) => h.actor === "requester" && h.action === "diedit")))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [task.id, task.requesterUpdatedAt]);
+  if (!entries.length) return null;
+  return (
+    <section className="stack requester-changes">
+      <h3 className="eyebrow row" style={{ gap: 6 }}><History size={14} aria-hidden="true" /> Perubahan dari requester</h3>
+      {entries.map((h) => (
+        <div key={h.id} className="history-entry stack" style={{ gap: 4 }}>
+          <p className="small" style={{ fontWeight: 600 }}>{fmtDateTime(h.createdAt)} <span className="muted" style={{ fontWeight: 400 }}>· oleh {task.requesterName || "requester"}</span></p>
+          <ul className="change-list">
+            {h.changes.map((c) => {
+              const { label, text } = describeChange(c);
+              return <li key={c.field}><span className="change-label">{label}</span><span>{text}</span></li>;
+            })}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function Checklist({ task, run }) {
   const [text, setText] = useState("");
   const [assignee, setAssignee] = useState(task.pic || DESIGNERS[0].name);
   const done = task.checklist.filter((c) => c.done).length;
+  // Progres per desainer, ditampilkan bila checklist dibagi ke lebih dari satu orang.
+  const people = DESIGNERS.map((d) => {
+    const mine = task.checklist.filter((c) => c.assignee === d.name);
+    return { name: d.name, total: mine.length, done: mine.filter((c) => c.done).length };
+  }).filter((p) => p.total > 0);
   const add = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -74,6 +113,15 @@ function Checklist({ task, run }) {
         <h3 className="eyebrow">Checklist</h3>
         {task.checklist.length > 0 && <span className="small muted">{done} dari {task.checklist.length} selesai</span>}
       </div>
+      {people.length > 1 && (
+        <p className="row small" style={{ gap: 12 }}>
+          {people.map((p) => (
+            <span key={p.name} className="row" style={{ gap: 6 }}>
+              <Avatar name={p.name} size={20} /> {p.name} {p.done}/{p.total}
+            </span>
+          ))}
+        </p>
+      )}
       {task.checklist.map((c) => (
         <div key={c.id} className={`check-item ${c.done ? "done" : ""}`}>
           <input
@@ -84,7 +132,7 @@ function Checklist({ task, run }) {
             onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { done: e.target.checked }))}
           />
           <label className="text" htmlFor={`chk-${c.id}`}>{c.text}</label>
-          <select aria-label={`PIC untuk "${c.text}"`} value={c.assignee || ""} onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { assignee: e.target.value }))}>
+          <select aria-label={`Dikerjakan oleh (${c.text})`} value={c.assignee || ""} onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { assignee: e.target.value }))}>
             {DESIGNERS.map((d) => <option key={d.name}>{d.name}</option>)}
           </select>
           <button type="button" className="icon-btn icon-btn-plain" aria-label={`Hapus "${c.text}"`} onClick={() => run(() => actions.removeChecklistItem(task.id, c.id))}>
@@ -94,7 +142,7 @@ function Checklist({ task, run }) {
       ))}
       <form className="row" style={{ flexWrap: "nowrap" }} onSubmit={add}>
         <input className="input grow" placeholder="Tambah item checklist" aria-label="Item checklist baru" value={text} onChange={(e) => setText(e.target.value)} style={{ background: "var(--brand-surface)" }} />
-        <select className="select" style={{ width: "auto" }} aria-label="PIC item baru" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+        <select className="select" style={{ width: "auto" }} aria-label="Dikerjakan oleh" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
           {DESIGNERS.map((d) => <option key={d.name}>{d.name}</option>)}
         </select>
         <button type="submit" className="btn btn-neutral">Tambah</button>
@@ -152,6 +200,11 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
     setConfirmDelete(false);
     setChangingPic(false);
   }, [task.id]);
+
+  // Membuka detail = tim sudah melihat perubahan dari requester; badge di kartu hilang.
+  useEffect(() => {
+    if (isUpdatedByRequester(task)) actions.markSeen(task.id).catch(() => {});
+  }, [task]);
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && !confirmDelete && onClose();
@@ -235,6 +288,8 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
             </>
           )}
 
+          <RequesterChanges task={task} />
+
           <section className="stack">
             <div className="row-between">
               <h3 className="eyebrow">Referensi dari requester</h3>
@@ -296,7 +351,7 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
       {confirmDelete && (
         <Modal labelledBy="delete-title" onClose={() => setConfirmDelete(false)}>
           <h2 id="delete-title" className="h-section">Hapus task ini?</h2>
-          <p>"{task.title}" akan dihapus permanen, termasuk referensi dan checklist-nya. Requester juga tidak akan melihatnya lagi di halaman status.</p>
+          <p>"{task.title}" akan dihapus permanen, termasuk referensi, checklist, dan riwayatnya. Requester juga tidak akan melihatnya lagi di halaman status.</p>
           <div className="modal-actions">
             <button type="button" className="btn btn-neutral" onClick={() => setConfirmDelete(false)}>Batal</button>
             <button

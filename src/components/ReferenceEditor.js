@@ -1,4 +1,5 @@
-// Input referensi di form request: upload gambar (dikompres otomatis) + link.
+// Input referensi di form request dan form edit: upload gambar (dikompres otomatis) + link.
+// Gambar baru punya dataUrl (belum di-upload); gambar lama di form edit punya url.
 
 import React, { useRef, useState } from "react";
 import { Link as LinkIcon, Upload, X } from "lucide-react";
@@ -89,7 +90,7 @@ export default function ReferenceEditor({ images, links, onImagesChange, onLinks
           <div className="ref-grid two">
             {images.map((img) => (
               <div key={img.id} className="ref-thumb">
-                <img src={img.dataUrl} alt="" />
+                <img src={img.dataUrl || img.url} alt="" />
                 <span className="caption" style={{ display: "block" }}>
                   {img.name} · {fmtBytes(img.size)}
                 </span>

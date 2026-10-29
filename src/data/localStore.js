@@ -5,10 +5,11 @@
 // Kalau localStorage penuh, aksi gagal dengan pesan jelas dan data di layar tidak berubah.
 
 import { newId } from "../lib/images";
-import { arr, normalizeTask } from "./taskModel";
+import { arr, historyAction, normalizeChecklistItem, normalizeTask, taskChanges } from "./taskModel";
 
 const KEY = "infarm_tasks_v6";
 const LEGACY_KEY = "infarm_tasks_v5";
+const HISTORY_KEY = "infarm_task_history_v1"; // { [taskId]: [{id, createdAt, actor, action, changes}] }
 
 export class StorageFullError extends Error {
   constructor() {
@@ -92,15 +93,47 @@ const getCache = () => {
 
 const notify = () => listeners.forEach((fn) => fn(cache));
 
-function write(next) {
+function save(key, value) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     if (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) throw new StorageFullError();
     throw e;
   }
+}
+
+function write(next) {
+  save(KEY, next);
   cache = next;
   notify();
+}
+
+// ─── Riwayat (padanan tabel task_history) ───────────────────────
+
+const readHistory = () => readRaw(HISTORY_KEY) || {};
+
+function logHistory(taskId, actor, action, changes = []) {
+  const all = readHistory();
+  const entry = { id: newId(), createdAt: new Date().toISOString(), actor, action, changes };
+  all[taskId] = [entry, ...arr(all[taskId])];
+  // Riwayat hanya pelengkap: kalau penyimpanan penuh, aksi utamanya tetap jalan.
+  try {
+    save(HISTORY_KEY, all);
+  } catch {}
+}
+
+// Ubah satu task. actor: "tim" | "requester" | null (null = tidak dicatat di riwayat, mis. checklist).
+function patchTask(id, patch, { actor = null, action, touch = true } = {}) {
+  const list = getCache();
+  const current = list.find((t) => t.id === id);
+  if (!current) throw new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
+  const changes = typeof patch === "function" ? patch(current) : patch;
+  const updated = normalizeTask({ ...current, ...changes, updatedAt: touch ? new Date().toISOString() : current.updatedAt });
+  const diff = taskChanges(current, updated);
+  if (actor === "requester" && !diff.length) throw new Error("Belum ada perubahan.");
+  write(list.map((t) => (t.id === id ? updated : t)));
+  if (actor && diff.length) logHistory(id, actor, action || historyAction(current.status, updated.status), diff);
+  return updated;
 }
 
 // Sinkron antar tab di browser yang sama (pengganti polling 3 detik).
@@ -129,22 +162,67 @@ export function subscribe(fn) {
 
 export async function createTask(input) {
   const now = new Date().toISOString();
-  const task = normalizeTask({ ...input, id: newId(), status: "request", pic: null, createdAt: now, updatedAt: now });
+  const task = normalizeTask({ ...input, id: newId(), status: "request", pic: null, checklist: [], createdAt: now, updatedAt: now });
   write([...getCache(), task]);
+  logHistory(task.id, "requester", "dibuat");
   return task;
 }
 
-// patch: objek field baru, atau fungsi (task) => objek field baru.
+// Perubahan dari tim. patch: objek field baru, atau fungsi (task) => objek field baru.
 export async function updateTask(id, patch) {
-  const list = getCache();
-  const current = list.find((t) => t.id === id);
-  if (!current) throw new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
-  const changes = typeof patch === "function" ? patch(current) : patch;
-  const updated = normalizeTask({ ...current, ...changes, updatedAt: new Date().toISOString() });
-  write(list.map((t) => (t.id === id ? updated : t)));
-  return updated;
+  return patchTask(id, patch, { actor: "tim" });
+}
+
+// Requester mengedit request-nya sendiri (hanya saat Request atau Todo).
+export async function requesterUpdateTask(id, fields) {
+  return patchTask(
+    id,
+    (t) => {
+      if (t.status !== "request" && t.status !== "todo") throw new Error("Request ini sudah mulai dikerjakan, jadi tidak bisa diedit lagi. Hubungi PIC-nya langsung.");
+      return { ...fields, requesterUpdatedAt: new Date().toISOString() };
+    },
+    { actor: "requester", action: "diedit" }
+  );
+}
+
+export async function markSeen(id) {
+  return patchTask(id, { picSeenAt: new Date().toISOString() }, { touch: false });
 }
 
 export async function deleteTask(id) {
   write(getCache().filter((t) => t.id !== id));
+  const all = readHistory();
+  if (all[id]) {
+    delete all[id];
+    try {
+      save(HISTORY_KEY, all);
+    } catch {}
+  }
+}
+
+export async function listHistory(taskId) {
+  return arr(readHistory()[taskId]);
+}
+
+// ─── Checklist (padanan tabel task_checklist) ───────────────────
+
+export async function addChecklistItem(taskId, text, assignee) {
+  return patchTask(taskId, (t) => ({
+    checklist: [...t.checklist, normalizeChecklistItem({ id: newId(), text, assignee, position: t.checklist.length })],
+  }));
+}
+
+export async function updateChecklistItem(taskId, itemId, changes) {
+  return patchTask(taskId, (t) => ({
+    checklist: t.checklist.map((c) => {
+      if (c.id !== itemId) return c;
+      const next = { ...c, ...changes };
+      if ("done" in changes) next.doneAt = changes.done ? c.doneAt || new Date().toISOString() : null;
+      return next;
+    }),
+  }));
+}
+
+export async function removeChecklistItem(taskId, itemId) {
+  return patchTask(taskId, (t) => ({ checklist: t.checklist.filter((c) => c.id !== itemId) }));
 }

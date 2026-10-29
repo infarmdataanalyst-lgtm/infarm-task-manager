@@ -89,7 +89,7 @@ export default function RequestPage() {
             <div className="req-detail">
               <p className="eyebrow">Referensi yang diterima tim desain</p>
               <ReferenceList task={sent} />
-              <p className="hint">Ada yang kurang? Kabari tim desain, atau kirim request baru.</p>
+              <p className="hint">Ada yang kurang? Klik <strong>Edit request</strong> di halaman status selama request belum mulai dikerjakan.</p>
             </div>
           </section>
           <div className="row sent-actions">

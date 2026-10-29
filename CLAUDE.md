@@ -20,7 +20,9 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban sampai selesai.
 4. **On Progress:** PIC memindahkan task-nya sendiri. **Tidak ada login**; aturan "hanya PIC" berbasis kepercayaan, tidak ditegakkan sistem.
 5. **Finish:** PIC memindahkan ke Finish **wajib menyertakan minimal satu link hasil**. Setelah Finish, gambar referensi boleh dihapus.
 6. **Revisi:** task Finish boleh dikembalikan ke On Progress.
-7. **Cek status (requester):** satu halaman publik tanpa login yang menampilkan **semua** request (tidak ada link unik per request; requester boleh melihat request orang lain). Requester bisa memastikan request-nya sudah masuk, bahwa gambar/link referensinya muncul dengan benar, serta melihat status, PIC, dan link hasil setelah Finish. Mockup UI/UX: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu
+7. **Kerja bersama:** satu task bisa dikerjakan Denny dan Arum sekaligus. PIC tetap satu (penanggung jawab: pindah status, isi link hasil); item checklist dibagi lewat `assignee` per item. Filter PIC dan beban kerja menghitung task di mana desainer itu PIC atau punya item checklist yang belum selesai.
+7a. **Edit oleh requester:** tanpa kode dan tanpa login, siapa pun di halaman status bisa klik "Edit request" selama status Request atau Todo (berbasis kepercayaan). On Progress: catatan "hubungi PIC"; Finish: tidak bisa diedit. Field yang diubah ditandai, perubahan dicatat di riwayat, dan kartu tim mendapat badge "Diperbarui requester" sampai detail task dibuka.
+7b. **Cek status (requester):** satu halaman publik tanpa login yang menampilkan **semua** request (tidak ada link unik per request; requester boleh melihat request orang lain). Requester bisa memastikan request-nya sudah masuk, bahwa gambar/link referensinya muncul dengan benar, serta melihat status, PIC, dan link hasil setelah Finish. Mockup UI/UX: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu
 
 8. **Tampilan board:** hanya tab **Kanban** dan **Analitik**. Tab List/Daftar dihapus karena sudah tercakup di halaman status. Semua halaman harus nyaman di desktop dan HP.
 
@@ -30,6 +32,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban sampai selesai.
    |---|---|---|
    | `/` | requester | Status semua request (halaman utama) + tombol "Buat request baru" |
    | `/request` | requester | Form request, lalu halaman "Request sudah masuk" |
+   | `/request/:id/edit` | requester | Edit request (hanya Request/Todo), lalu "Perubahan tersimpan" |
    | `/tim` | tim desain | Board Kanban (dilindungi PIN) |
    | `/tim/analitik` | tim desain | Analitik (dilindungi PIN) |
    | `/tim/task/:id` | tim desain | Detail task (deep link) |
@@ -50,7 +53,7 @@ Alur di atas sudah diterapkan di kode. Database bersama memakai Supabase (aktif 
 - React Router 6 (path asli; rewrite SPA di `vercel.json`)
 - Ikon: `lucide-react` (sesuai design system Infarm)
 - Styling: `src/styles.css` dengan CSS variables dari design system Infarm (brand-primary `#00843b`, brand-surface `#f5ffef`, Montserrat untuk heading, Geist untuk teks). Breakpoint HP: 720px.
-- Penyimpanan: **Supabase** (`@supabase/supabase-js`: tabel `tasks`, Storage bucket `references`, Realtime) bila `REACT_APP_SUPABASE_URL` + key diatur; kalau tidak, **mode uji coba** `localStorage` (key `infarm_tasks_v6`). Pemilihan otomatis di `src/data/taskStore.js`.
+- Penyimpanan: **Supabase** (`@supabase/supabase-js`: tabel `tasks`, `task_checklist`, `task_history`, `app_settings`, Storage bucket `references`, Realtime) bila `REACT_APP_SUPABASE_URL` + key diatur; kalau tidak, **mode uji coba** `localStorage` (key `infarm_tasks_v6`). Pemilihan otomatis di `src/data/taskStore.js`.
 - `api/request.js`: Vercel Serverless Function lama untuk Google Apps Script. Tidak dipakai frontend dan tidak menyimpan data.
 
 ## Perintah
@@ -69,7 +72,7 @@ Environment variable (atur di Vercel → Settings → Environment Variables):
 
 Langkah lengkap menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md`.
 
-Belum ada test otomatis. Uji manual minimal: kirim request bergambar + link, Ambil, Mulai, Finish (wajib link), Revisi, cek halaman status, cek tampilan HP (lebar 390px).
+Belum ada test otomatis. Uji manual minimal: kirim request bergambar + link, Edit request (ubah deadline, hapus/tambah gambar), Ambil (cek badge "Diperbarui requester" dan riwayat di detail), checklist dibagi Denny & Arum, Mulai (tombol Edit di halaman status hilang), Finish (wajib link), Revisi, cek halaman status, cek tampilan HP (lebar 390px).
 
 ## Struktur file
 
@@ -81,21 +84,24 @@ src/index.js               entry: BrowserRouter + styles.css
 src/App.js                 routing + redirect link lama "/#/request"
 src/config.js              DESIGNERS (nama + warna), CATEGORIES, DIVISIONS, STATUS, PIN hash, STORAGE_MODE
 src/styles.css             semua style (token Infarm, komponen, responsive)
-supabase/schema.sql        skema database, aturan akses (RLS), fungsi RPC tim (cek PIN), bucket Storage, Realtime. Idempotent.
+supabase/schema.sql        skema database v7, aturan akses (RLS), fungsi RPC tim (cek PIN) & requester, bucket Storage, Realtime.
+                           Idempotent; juga meng-upgrade database v6 (checklist jsonb → tabel task_checklist).
 supabase/set-pin.sql       atur/ganti PIN tim (disimpan sebagai hash)
 docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Vercel
 src/data/
   taskStore.js             pintu masuk data: memilih supabaseStore atau localStore sesuai STORAGE_MODE
   supabaseStore.js         CRUD via Supabase (select/insert publik, update/delete lewat RPC ber-PIN), upload/hapus gambar, Realtime
-  localStore.js            CRUD via localStorage (mode uji coba) + migrasi v5→v6 + sinkron antar tab
-  taskModel.js             normalizeTask, pemetaan field camelCase ↔ kolom snake_case (fromRow/toRow)
-  taskActions.js           aksi alur kerja (submitRequest, assignTask, startTask, finishTask, reviseTask, checklist, ...)
+  localStore.js            CRUD via localStorage (mode uji coba) + riwayat (key infarm_task_history_v1) + migrasi v5→v6 + sinkron antar tab
+  taskModel.js             normalizeTask, pemetaan field camelCase ↔ kolom snake_case (fromRow/toRow),
+                           taskChanges/historyAction (padanan SQL), isUpdatedByRequester, helpers, involves
+  taskActions.js           aksi alur kerja (submitRequest, editRequest, assignTask, startTask, finishTask, reviseTask, markSeen, checklist, ...)
   useTasks.js              hook React: daftar task yang ikut berubah otomatis
 src/lib/
   dates.js                 tanggal, overdue, deadline dekat, tepat waktu, rentang periode analitik
   images.js                kompres gambar (maks 1600px, JPEG 0.8), fmtBytes, newId
   links.js                 normalizeUrl (tambah https:// otomatis), displayUrl
   csv.js                   export CSV (escape RFC 4180 + BOM untuk Excel)
+  changes.js               teks riwayat perubahan ("5 Nov 2026 → 7 Nov 2026", "ref-2.jpg dihapus")
   pin.js                   PIN tim: cek ke server (mode Supabase) atau hash lokal; simpan PIN di browser untuk dikirim ke RPC
 src/components/
   ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Stepper, Modal, Lightbox,
@@ -104,15 +110,16 @@ src/components/
 src/pages/
   StatusPage.js            "/"  status semua request (publik)
   RequestPage.js           "/request" form + konfirmasi "Request sudah masuk"
+  EditRequestPage.js       "/request/:id/edit" edit oleh requester + konfirmasi "Perubahan tersimpan"
   team/TeamLayout.js       "/tim/*" layar PIN, header tim, tab Kanban/Analitik
   team/BoardPage.js        "/tim", "/tim/task/:id" Kanban, filter, statistik, beban kerja
   team/TaskCard.js         kartu Kanban + tombol sesuai tahap
-  team/TaskDetail.js       panel detail (kanan di desktop, layar penuh di HP): edit, checklist, link hasil, hapus
+  team/TaskDetail.js       panel detail (kanan di desktop, layar penuh di HP): edit, perubahan dari requester, checklist per orang, link hasil, hapus
   team/FinishDialog.js     dialog Finish: wajib link hasil, opsi hapus gambar referensi
   team/AnalyticsPage.js    "/tim/analitik" KPI per periode, per desainer, per kategori/divisi
 ```
 
-## Model data Task (v6)
+## Model data Task (v7)
 
 ```js
 {
@@ -124,10 +131,13 @@ src/pages/
   referenceImages: [{ id, name, size /* byte */, path, url }],  // Supabase Storage (mode lokal: dataUrl)
   referenceLinks: [{ id, url }],
   resultLinks: [{ id, url }],       // wajib ≥1 saat finish
-  checklist: [{ id, text, done, assignee }],
+  checklist: [{ id, text, done, assignee, doneAt, position }],   // Supabase: tabel task_checklist (1 baris per item)
   createdAt, assignedAt, startedAt, finishedAt, referenceImagesDeletedAt, updatedAt: ISO string | null,
+  requesterUpdatedAt, picSeenAt: ISO string | null,   // badge "Diperbarui requester" bila picSeenAt < requesterUpdatedAt
 }
 ```
+
+Riwayat (`task_history` / key lokal `infarm_task_history_v1`): `{ actor: "requester" | "tim", action, changes: [{ field, before, after }] }`, ditulis server (trigger + fungsi RPC). Aksi: dibuat, diedit, diambil, dimulai, selesai, revisi, dilepas, dikembalikan, diubah. Perubahan checklist tidak dicatat.
 
 Data lama (`infarm_tasks_v5`) dimigrasi otomatis sekali ke v6 oleh `taskStore.load()`. Task contoh lama dibuang, lampiran non-gambar lama dibuang (dulu hanya nama file), dan key v5 dibiarkan sebagai cadangan.
 
@@ -152,7 +162,7 @@ Mockup final: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu (catatan hijau "
 ## Pola dan konvensi kode
 
 - Komponen tidak pernah memanggil Supabase/localStorage langsung: baca lewat `useTasks()`, ubah lewat fungsi di `taskActions.js`.
-- Kolom baru di task: tambah di `schema.sql` (tabel + `team_update_task`), `taskModel.js` (`normalizeTask`, `COLUMNS`), lalu UI.
+- Kolom baru di task: tambah di `schema.sql` (tabel + `alter table ... add column if not exists` + `team_update_task`, dan `requester_update_task` bila requester boleh mengubahnya), `taskModel.js` (`normalizeTask`, `COLUMNS`, `REQUESTER_FIELDS`, `HISTORY_FIELDS` bila perlu dicatat), lalu UI. Fungsi `task_changes`/`task_action` di SQL dan `taskChanges`/`historyAction` di JS harus tetap sama.
 - Aksi dijalankan lewat `useAction(showToast)` → `run(() => aksi(...), "pesan sukses")`. Error (mis. penyimpanan penuh) otomatis jadi toast, dan data di layar tidak berubah.
 - `taskStore` memperbarui cache hanya SETELAH penulisan berhasil.
 - Desainer baru: tambah di `DESIGNERS` (`config.js`). Semua tombol Ambil, filter, checklist, dan analitik ikut otomatis.
@@ -169,8 +179,8 @@ Mockup final: https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu (catatan hijau "
 
 ## Integrasi Supabase (sudah di kode)
 
-- Requester (`anon`): `SELECT` semua task, `INSERT` request baru bersih (status `request`, tanpa PIC/hasil/checklist), upload gambar ke `references/<id task>/<file>.jpg` (`cacheControl` 1 tahun).
-- Tim: semua perubahan lewat `team_update_task(p_pin, p_id, p_patch)` dan `team_delete_task(p_pin, p_id)`; PIN dicocokkan dengan hash di `app_settings` (tidak bisa dibaca dari browser). PIN salah → error `invalid_pin` → aplikasi kembali ke layar PIN.
+- Requester (`anon`): `SELECT` semua task, checklist, dan riwayat; `INSERT` request baru bersih (status `request`, tanpa PIC/hasil); upload gambar ke `references/<id task>/<file>.jpg` (`cacheControl` 1 tahun); edit lewat `requester_update_task(p_id, p_patch)` hanya saat Request/Todo (selain itu error `edit_locked`; tanpa perubahan: `no_changes`).
+- Tim: semua perubahan lewat `team_update_task(p_pin, p_id, p_patch)`, `team_mark_seen`, `team_delete_task`, dan `team_add/update/delete_checklist_item` (satu item per panggilan, jadi centang paralel tidak saling menimpa); PIN dicocokkan dengan hash di `app_settings` (tidak bisa dibaca dari browser). PIN salah → error `invalid_pin` → aplikasi kembali ke layar PIN.
 - Constraint database: `tasks_pic_wajib` (status selain request wajib PIC), `tasks_link_hasil_wajib` (finish wajib link hasil).
-- Gambar referensi hanya bisa dihapus bila task sudah Finish atau sudah dihapus (policy Storage).
-- Uji SQL lokal: Postgres 16 + stub role `anon`/`authenticated`, schema `storage`, publication `supabase_realtime`.
+- Gambar referensi hanya bisa dihapus bila task sudah Finish, sudah dihapus, atau gambar itu sudah tidak dipakai task-nya (policy Storage).
+- Uji SQL lokal: Postgres 16 + stub role `anon`/`authenticated`, schema `storage`, publication `supabase_realtime`. Uji upgrade: jalankan `schema.sql` versi lama + data, lalu yang baru, dan bandingkan `pg_dump -s` dengan database baru.

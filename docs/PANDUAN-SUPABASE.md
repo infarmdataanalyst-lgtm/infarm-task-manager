@@ -22,9 +22,14 @@ Selama langkah 5 belum selesai, aplikasi tetap berjalan dalam **mode uji coba** 
    - Skrip ini aman dijalankan ulang.
 3. Skrip tadi sekaligus membuat:
    - tabel `tasks` beserta aturan alur kerja (PIC wajib, link hasil wajib),
-   - aturan akses (requester hanya bisa melihat dan mengirim request; perubahan tim wajib PIN),
+   - tabel `task_checklist` (checklist per item, bisa dibagi ke Denny dan Arum) dan `task_history` (riwayat perubahan),
+   - aturan akses (requester hanya bisa melihat, mengirim request, dan mengedit request yang belum dikerjakan; perubahan tim wajib PIN),
    - bucket Storage `references` untuk gambar referensi (maks 2 MB per file, hanya JPG/PNG/WEBP),
    - Realtime supaya board dan halaman status ikut berubah otomatis.
+
+### Sudah pernah menjalankan schema.sql versi sebelumnya?
+
+Cukup jalankan **ulang** `supabase/schema.sql` yang terbaru dengan cara yang sama. Skrip mendeteksi database lama, memindahkan checklist yang sudah ada ke tabel baru tanpa kehilangan data, lalu menambah kolom dan fungsi baru. Task, gambar, dan PIN yang sudah ada tidak berubah. Setelah itu deploy ulang aplikasi (langkah 5) supaya kode baru terpakai.
 
 ## 3. Atur PIN tim
 
@@ -61,7 +66,8 @@ Untuk mengganti PIN nanti, jalankan file yang sama dengan PIN baru. Semua perang
 2. Buka `/tim` dari **laptop** → masukkan PIN. Request dari HP harus muncul di kolom **Request** tanpa perlu refresh.
 3. Klik **Ambil**, **Mulai kerjakan**, lalu **Selesai, kirim link hasil** dengan sebuah link.
 4. Di HP, buka halaman status: request tadi harus berstatus **Finish** dengan tombol **Buka hasil desain**.
-5. Banner oranye "Mode uji coba" sudah tidak muncul.
+5. Kirim request baru lagi, lalu di halaman status klik **Edit request**, ubah deadline, dan **Simpan perubahan**. Di `/tim`, kartunya harus menampilkan badge **Diperbarui requester**, dan detail task menampilkan **Perubahan dari requester**.
+6. Banner oranye "Mode uji coba" sudah tidak muncul.
 
 Kalau ada langkah yang gagal, kirim screenshot ke developer.
 

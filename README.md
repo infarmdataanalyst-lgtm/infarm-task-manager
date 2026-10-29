@@ -4,6 +4,7 @@ Aplikasi request desain untuk Tim Desain infarm.id.
 
 - `/`: status semua request (publik)
 - `/request`: form request desain
+- `/request/:id/edit`: edit request oleh requester (selama belum mulai dikerjakan)
 - `/tim`: board Kanban dan analitik tim desain (dilindungi PIN)
 
 ```bash

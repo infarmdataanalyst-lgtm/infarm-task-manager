@@ -5,6 +5,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ExternalLink, ImageIcon } from "lucide-react";
 import { DESIGNERS } from "../../config";
+import { helpers, isUpdatedByRequester } from "../../data/taskModel";
 import { daysLate, dueSoonLabel, fmtDayShort, fmtShort, isDueSoon, isOverdue } from "../../lib/dates";
 import { displayUrl } from "../../lib/links";
 import { Avatar, StatusBadge, referenceSummary } from "../../components/ui";
@@ -12,6 +13,7 @@ import { Avatar, StatusBadge, referenceSummary } from "../../components/ui";
 export default function TaskCard({ task: t, busy, onAssign, onStart, onFinish, onRevise }) {
   const late = isOverdue(t);
   const done = t.checklist.filter((c) => c.done).length;
+  const others = helpers(t);
 
   return (
     <article className="task-card">
@@ -19,6 +21,7 @@ export default function TaskCard({ task: t, busy, onAssign, onStart, onFinish, o
         <StatusBadge status={t.status} />
         {late && <span className="badge badge-late">Terlambat {daysLate(t)} hari</span>}
         {!late && isDueSoon(t) && <span className="badge badge-soon">{dueSoonLabel(t)}</span>}
+        {isUpdatedByRequester(t) && <span className="badge badge-updated-strong">Diperbarui requester</span>}
         <span className="card-due" style={{ color: late ? "var(--rose-700)" : undefined }}>
           {t.status === "finish" ? `Selesai ${fmtShort(t.finishedAt)}` : `Deadline ${fmtDayShort(t.dueDate)}`}
         </span>
@@ -29,6 +32,11 @@ export default function TaskCard({ task: t, busy, onAssign, onStart, onFinish, o
         {t.pic && (
           <span style={{ fontWeight: 600 }}>
             <Avatar name={t.pic} size={20} /> PIC: {t.pic}
+          </span>
+        )}
+        {others.length > 0 && (
+          <span>
+            {others.map((name) => <Avatar key={name} name={name} size={20} />)} bersama {others.join(", ")}
           </span>
         )}
         <span><ImageIcon size={14} aria-hidden="true" /> {referenceSummary(t)}</span>
