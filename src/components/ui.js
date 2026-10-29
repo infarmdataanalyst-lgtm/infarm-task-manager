@@ -16,8 +16,8 @@ export function AppHeader({ title, subtitle, to = "/", children }) {
             <img src="/logo-infarm.png" alt="Logo Infarm" />
           </span>
           <span className="grow">
-            <span className="brand-title" style={{ display: "block" }}>{title}</span>
-            {subtitle && <span className="brand-sub" style={{ display: "block" }}>{subtitle}</span>}
+            <span className="brand-title">{title}</span>
+            {subtitle && <span className="brand-sub">{subtitle}</span>}
           </span>
         </Link>
         {children && <div className="header-actions">{children}</div>}

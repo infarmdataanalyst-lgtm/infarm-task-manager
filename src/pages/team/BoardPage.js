@@ -179,7 +179,7 @@ export default function BoardPage() {
       {id && !selected && (
         <div className="modal-wrap">
           <div className="modal" role="alertdialog" aria-labelledby="nf-title">
-            <h2 id="nf-title" style={{ fontSize: 18, fontWeight: 600 }}>Task tidak ditemukan</h2>
+            <h2 id="nf-title" className="h-section">Task tidak ditemukan</h2>
             <p>Task ini mungkin sudah dihapus.</p>
             <div className="modal-actions"><button type="button" className="btn btn-primary" onClick={closeDetail}>Kembali ke board</button></div>
           </div>

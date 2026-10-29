@@ -97,7 +97,7 @@ function Checklist({ task, run }) {
         <select className="select" style={{ width: "auto" }} aria-label="PIC item baru" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
           {DESIGNERS.map((d) => <option key={d.name}>{d.name}</option>)}
         </select>
-        <button type="submit" className="btn btn-neutral" style={{ minHeight: 44 }}>Tambah</button>
+        <button type="submit" className="btn btn-neutral">Tambah</button>
       </form>
     </section>
   );
@@ -135,7 +135,7 @@ function ResultLinks({ task, run }) {
       ))}
       <form className="row" style={{ flexWrap: "nowrap" }} onSubmit={add}>
         <input type="text" inputMode="url" className={`input grow ${error ? "input-invalid" : ""}`} placeholder="Tambah link hasil lain" aria-label="Link hasil baru" value={value} onChange={(e) => { setValue(e.target.value); setError(""); }} />
-        <button type="submit" className="btn btn-neutral" style={{ minHeight: 44 }}>Tambah</button>
+        <button type="submit" className="btn btn-neutral">Tambah</button>
       </form>
       {error && <p className="error-text">{error}</p>}
     </div>
@@ -176,7 +176,7 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
               <X size={18} />
             </button>
           </div>
-          <h2 id="detail-title" style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.5 }}>{task.title}</h2>
+          <h2 id="detail-title" className="h-section">{task.title}</h2>
           <p className="small muted">{task.category} · dikirim {fmtDateTime(task.createdAt)}</p>
           <Stepper status={task.status} />
         </div>
@@ -237,7 +237,7 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
         <div className="drawer-foot">
           {task.status === "request" &&
             DESIGNERS.map((d, i) => (
-              <button key={d.name} type="button" className={`btn ${i % 2 ? "btn-outline-soil" : "btn-outline"} grow`} style={{ minHeight: 44 }} disabled={busy} onClick={() => run(() => actions.assignTask(task.id, d.name), `Diambil ${d.name}.`)}>
+              <button key={d.name} type="button" className={`btn ${i % 2 ? "btn-outline-soil" : "btn-outline"} grow`} disabled={busy} onClick={() => run(() => actions.assignTask(task.id, d.name), `Diambil ${d.name}.`)}>
                 Ambil: {d.name}
               </button>
             ))}
@@ -260,7 +260,7 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
             </>
           )}
           {task.status === "finish" && (
-            <button type="button" className="btn btn-secondary grow" style={{ minHeight: 44 }} disabled={busy} onClick={() => run(() => actions.reviseTask(task.id), "Task kembali ke On Progress untuk revisi.")}>
+            <button type="button" className="btn btn-secondary grow" disabled={busy} onClick={() => run(() => actions.reviseTask(task.id), "Task kembali ke On Progress untuk revisi.")}>
               <RotateCcw size={16} aria-hidden="true" /> Revisi: kembali ke On Progress
             </button>
           )}
@@ -279,7 +279,7 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
 
       {confirmDelete && (
         <Modal labelledBy="delete-title" onClose={() => setConfirmDelete(false)}>
-          <h2 id="delete-title" style={{ fontSize: 18, fontWeight: 600 }}>Hapus task ini?</h2>
+          <h2 id="delete-title" className="h-section">Hapus task ini?</h2>
           <p>"{task.title}" akan dihapus permanen, termasuk referensi dan checklist-nya. Requester juga tidak akan melihatnya lagi di halaman status.</p>
           <div className="modal-actions">
             <button type="button" className="btn btn-neutral" onClick={() => setConfirmDelete(false)}>Batal</button>

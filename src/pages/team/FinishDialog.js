@@ -35,7 +35,7 @@ export default function FinishDialog({ task, run, busy, onClose, onDone }) {
             <Check size={20} />
           </span>
           <div className="grow">
-            <h2 id="finish-title" style={{ fontSize: 18, fontWeight: 600 }}>Tandai selesai</h2>
+            <h2 id="finish-title" className="h-section">Tandai selesai</h2>
             <p className="muted">{task.title}{task.pic ? ` · PIC ${task.pic}` : ""}</p>
           </div>
           <button type="button" className="icon-btn icon-btn-plain" aria-label="Tutup" onClick={onClose}><X size={18} /></button>
@@ -88,7 +88,7 @@ export default function FinishDialog({ task, run, busy, onClose, onDone }) {
         )}
 
         <div className="modal-actions">
-          <button type="button" className="btn btn-neutral" style={{ minHeight: 44, borderRadius: 12 }} onClick={onClose}>Batal</button>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>Batal</button>
           <button type="submit" className="btn btn-primary btn-cta" disabled={busy}>Simpan dan pindah ke Finish</button>
         </div>
       </form>

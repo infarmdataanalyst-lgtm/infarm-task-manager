@@ -139,7 +139,7 @@ export default function StatusPage() {
             );
           })}
           {visible.length > limit && (
-            <button type="button" className="btn btn-secondary" style={{ alignSelf: "center", minHeight: 44 }} onClick={() => setLimit(limit + PAGE_SIZE)}>
+            <button type="button" className="btn btn-secondary" style={{ alignSelf: "center" }} onClick={() => setLimit(limit + PAGE_SIZE)}>
               Muat {Math.min(PAGE_SIZE, visible.length - limit)} request lainnya
             </button>
           )}

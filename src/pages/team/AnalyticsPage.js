@@ -119,7 +119,7 @@ export default function AnalyticsPage() {
             <div className="row" style={{ gap: 12, flexWrap: "nowrap" }}>
               <Avatar name={p.name} size={44} />
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</h2>
+                <h2 className="h-section">{p.name}</h2>
                 <p className="small muted">{p.note}</p>
               </div>
             </div>
@@ -142,11 +142,11 @@ export default function AnalyticsPage() {
       <section className="grid-auto-340">
         {[["Request per kategori", data.byCategory], ["Request per divisi", data.byDivision]].map(([title, rows]) => (
           <div key={title} className="card card-pad stack">
-            <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{title}</h2>
+            <h2 className="h-card" style={{ marginBottom: 4 }}>{title}</h2>
             {rows.length === 0 && <p className="muted">Belum ada request di periode ini.</p>}
             {rows.map((r) => (
               <div key={r.label} className="bar-row">
-                <span style={{ fontSize: 13, color: "var(--zinc-700)" }}>{r.label}</span>
+                <span className="small" style={{ color: "var(--zinc-700)" }}>{r.label}</span>
                 <div className="bar-track" aria-hidden="true"><div style={{ width: r.pct }} /></div>
                 <span style={{ fontWeight: 600, textAlign: "right" }}>{r.value}</span>
               </div>

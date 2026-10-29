@@ -74,7 +74,7 @@ export default function RequestPage() {
           <div className="row" style={{ gap: 16, flexWrap: "nowrap", alignItems: "center" }}>
             <span className="success-icon"><Check size={28} strokeWidth={2.5} aria-hidden="true" /></span>
             <div>
-              <h1 style={{ fontSize: 24 }}>Request sudah masuk</h1>
+              <h1 className="h-page">Request sudah masuk</h1>
               <p style={{ color: "var(--zinc-700)" }}>Tersimpan di sistem tim desain. Cek di bawah apakah referensimu terbaca dengan benar.</p>
             </div>
           </div>
@@ -87,8 +87,8 @@ export default function RequestPage() {
               <span className="small muted">Dikirim {fmtDateTime(sent.createdAt)}</span>
             </div>
             <div>
-              <h2 style={{ fontSize: 18, fontWeight: 600 }}>{sent.title}</h2>
-              <p className="muted" style={{ fontSize: 13 }}>
+              <h2 className="h-section">{sent.title}</h2>
+              <p className="small muted">
                 {sent.category} · {sent.requesterName} ({sent.division}) · deadline {fmtDay(sent.dueDate)}
               </p>
             </div>
@@ -100,7 +100,7 @@ export default function RequestPage() {
           </section>
           <div className="row">
             <Link to="/" className="btn btn-primary btn-cta">Lihat di halaman status</Link>
-            <button type="button" className="btn btn-secondary" style={{ minHeight: 48, borderRadius: 12 }} onClick={reset}>
+            <button type="button" className="btn btn-secondary btn-lg" onClick={reset}>
               Kirim request lain
             </button>
           </div>
@@ -110,7 +110,7 @@ export default function RequestPage() {
           <LocalModeBanner />
           <form className="request-layout" onSubmit={submit}>
             <section className="main card card-pad-lg stack-lg" aria-labelledby="detail-heading">
-              <h1 id="detail-heading" style={{ fontSize: 18, fontWeight: 600 }}>Detail request</h1>
+              <h1 id="detail-heading" className="h-section">Detail request</h1>
               <div className="grid-2 keep">
                 <div className="field">
                   <label className="label" htmlFor="f-name">Nama kamu <span className="required">*</span></label>
@@ -148,7 +148,7 @@ export default function RequestPage() {
 
             <aside className="side">
               <section className="card card-pad-lg stack" aria-labelledby="ref-heading">
-                <h2 id="ref-heading" style={{ fontSize: 18, fontWeight: 600 }}>Referensi</h2>
+                <h2 id="ref-heading" className="h-section">Referensi</h2>
                 <p className="hint" style={{ marginTop: -4 }}>Upload gambar dan/atau tempel link.</p>
                 <ReferenceEditor
                   images={images}

@@ -56,7 +56,7 @@ function PinScreen({ onUnlocked }) {
             <span className="brand-logo" style={{ width: 56, height: 56, border: "1px solid var(--brand-light)", background: "var(--brand-surface)" }}>
               <img src="/logo-infarm.png" alt="Logo Infarm" />
             </span>
-            <h1 style={{ fontSize: 20 }}>Board tim desain</h1>
+            <h1 className="h-page">Board tim desain</h1>
             <p className="muted">Masukkan PIN tim untuk mengelola task.</p>
           </div>
           <fieldset style={{ border: 0, margin: 0, padding: 0 }} className="stack">
@@ -78,7 +78,7 @@ function PinScreen({ onUnlocked }) {
               ))}
             </div>
             {error && <p className="error-text" role="alert">PIN salah atau belum lengkap. Coba lagi.</p>}
-            <label className="row" style={{ minHeight: 44, color: "var(--zinc-700)" }}>
+            <label className="row" style={{ minHeight: 40, color: "var(--zinc-700)" }}>
               <input type="checkbox" className="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               Ingat di perangkat ini
             </label>
@@ -86,7 +86,7 @@ function PinScreen({ onUnlocked }) {
           <button type="submit" className="btn btn-primary btn-cta" disabled={checking}>{checking ? "Memeriksa…" : "Masuk"}</button>
           <p className="small muted" style={{ textAlign: "center" }}>Lupa PIN? Tanya Denny atau Arum.</p>
         </form>
-        <Link to="/" className="row" style={{ justifyContent: "center", minHeight: 44, fontWeight: 600, textDecoration: "none" }}>
+        <Link to="/" className="row" style={{ justifyContent: "center", minHeight: 40, fontWeight: 600, textDecoration: "none" }}>
           Bukan tim desain? Lihat status request <ArrowRight size={16} aria-hidden="true" />
         </Link>
       </div>

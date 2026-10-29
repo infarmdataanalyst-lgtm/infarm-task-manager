@@ -137,7 +137,7 @@ export default function ReferenceEditor({ images, links, onImagesChange, onLinks
             aria-invalid={!!linkError}
             aria-describedby="ref-link-hint"
           />
-          <button type="button" className="btn btn-neutral" style={{ minHeight: 44 }} onClick={addLink}>
+          <button type="button" className="btn btn-neutral" onClick={addLink}>
             Tambah
           </button>
         </div>
