@@ -1,5 +1,6 @@
 import { STATUS } from "../config";
 import { fmtDay, fmtDateTime } from "./dates";
+import { taskWorkMinutes } from "./worktime";
 
 // Escape sesuai RFC 4180: bungkus dengan kutip, kutip di dalam nilai digandakan.
 const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -7,7 +8,7 @@ const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 export function tasksToCsv(tasks) {
   const header = [
     "Judul", "Kategori", "Status", "PIC", "Deadline", "Divisi", "Nama Requester",
-    "Dikirim", "Selesai", "Checklist", "Gambar Referensi", "Link Referensi", "Link Hasil",
+    "Dikirim", "Selesai", "Waktu Kerja (menit)", "Checklist", "Lampiran", "Link Referensi", "Link Hasil",
   ];
   const rows = tasks.map((t) => [
     t.title,
@@ -19,8 +20,9 @@ export function tasksToCsv(tasks) {
     t.requesterName,
     fmtDateTime(t.createdAt),
     fmtDateTime(t.finishedAt),
+    taskWorkMinutes(t),
     `${t.checklist.filter((c) => c.done).length}/${t.checklist.length}`,
-    t.referenceImages.length,
+    t.attachments.length,
     t.referenceLinks.map((l) => l.url).join(" "),
     t.resultLinks.map((l) => l.url).join(" "),
   ]);

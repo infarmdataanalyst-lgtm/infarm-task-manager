@@ -1,12 +1,5 @@
-// Konfigurasi aplikasi: daftar pilihan, status, desainer, dan PIN tim.
-
-export const DESIGNERS = [
-  { name: "Denny", color: "#00843b" },
-  { name: "Arum", color: "#6b4e3d" },
-];
-
-export const designerColor = (name) =>
-  DESIGNERS.find((d) => d.name === name)?.color || "#6b7280";
+// Konfigurasi aplikasi: daftar pilihan, status, dan koneksi Supabase.
+// Anggota tim (desainer + admin) diatur di database (tabel team_members), bukan di sini.
 
 export const CATEGORIES = [
   "Social Media Post",
@@ -23,17 +16,21 @@ export const CATEGORIES = [
   "Lainnya",
 ];
 
-export const DIVISIONS = ["Sales Team", "Bidev Team", "HRD", "Marketing", "Management", "Lainnya"];
+export const DIVISIONS = ["Sales Team", "Bidev Team", "HRD", "Marketing", "Management", "FAT", "Lainnya"];
 
-// Urutan status = urutan tahapan di stepper.
-export const STATUSES = ["request", "todo", "on_progress", "finish"];
+// Urutan status = urutan kolom Kanban.
+export const STATUSES = ["request", "on_progress", "delay", "finish"];
 
 export const STATUS = {
-  request: { label: "Request", step: 1 },
-  todo: { label: "Todo", step: 2 },
-  on_progress: { label: "On Progress", step: 3 },
-  finish: { label: "Finish", step: 4 },
+  request: { label: "Request", note: "belum ada PIC" },
+  on_progress: { label: "On Progress", note: "waktu berjalan" },
+  delay: { label: "Delay", note: "waktu berhenti" },
+  finish: { label: "Finish", note: "30 hari terakhir" },
 };
+
+// Lampiran request.
+export const MAX_ATTACHMENTS = 5;
+export const MAX_PDF_BYTES = 5 * 1024 * 1024;
 
 // Koneksi Supabase (database bersama). Atur di Vercel → Settings → Environment Variables:
 // REACT_APP_SUPABASE_URL dan REACT_APP_SUPABASE_PUBLISHABLE_KEY (atau key lama: REACT_APP_SUPABASE_ANON_KEY).
@@ -44,6 +41,9 @@ export const SUPABASE_KEY = (process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY || p
 // "supabase" kalau koneksi di atas diatur; selain itu "local" = localStorage browser (mode uji coba).
 export const STORAGE_MODE = SUPABASE_URL && SUPABASE_KEY ? "supabase" : "local";
 
-// Khusus mode lokal: hash SHA-256 dari PIN tim (REACT_APP_TEAM_PIN_SHA256). Kosong = /tim tidak dikunci.
-// Di mode Supabase, PIN diatur lewat supabase/set-pin.sql dan dicek di server.
-export const TEAM_PIN_SHA256 = (process.env.REACT_APP_TEAM_PIN_SHA256 || "").trim().toLowerCase();
+// Mode uji coba: akun tiruan pengganti login Google.
+export const LOCAL_MEMBERS = [
+  { email: "arum@contoh.id", name: "Arum", role: "designer", color: "#6b4e3d", active: true },
+  { email: "denny@contoh.id", name: "Denny", role: "designer", color: "#00843b", active: true },
+  { email: "spv@contoh.id", name: "SPV", role: "admin", color: "#3f3f46", active: true },
+];

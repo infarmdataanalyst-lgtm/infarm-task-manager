@@ -1,22 +1,20 @@
-// /tim dan /tim/task/:id — board Kanban tim desain.
+// /tim dan /tim/task/:id — board Kanban: Request → On Progress → Delay → Finish.
+// Kartu bisa digeser maju/mundur (desktop) atau lewat "Pindah ke…" (desktop & HP).
 
 import React, { useCallback, useMemo, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
-import { Search } from "lucide-react";
-import { DESIGNERS, STATUS, STATUSES } from "../../config";
+import { STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
 import { involves } from "../../data/taskModel";
 import { daysBetween, isOverdue, parseDay, today } from "../../lib/dates";
-import { Avatar, useAction } from "../../components/ui";
+import { Avatar, useAction, useNow } from "../../components/ui";
 import TaskCard from "./TaskCard";
 import TaskDetail from "./TaskDetail";
-import FinishDialog from "./FinishDialog";
+import MoveDialog from "./MoveDialog";
 
 const FINISH_WINDOW_DAYS = 30;
 
-const COLUMN_NOTE = { request: "belum ada PIC", finish: `${FINISH_WINDOW_DAYS} hari terakhir` };
-
-const byDue = (a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
+const byDue = (a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || new Date(a.createdAt) - new Date(b.createdAt);
 
 function matchesDue(task, due) {
   if (due === "all") return true;
@@ -26,48 +24,48 @@ function matchesDue(task, due) {
   return due === "today" ? diff === 0 : diff >= 0 && diff <= 7;
 }
 
+const canDrag = () => typeof window !== "undefined" && window.matchMedia("(min-width: 721px) and (pointer: fine)").matches;
+
 export default function BoardPage() {
-  const { tasks, showToast } = useOutletContext();
+  const { tasks, showToast, query, member, designers, colorOf } = useOutletContext();
   const { id } = useParams();
   const navigate = useNavigate();
   const [run, busy] = useAction(showToast);
-  const [query, setQuery] = useState("");
+  const now = useNow();
+  const [mine, setMine] = useState(false);
   const [pic, setPic] = useState("all");
   const [due, setDue] = useState("all");
   const [activeCol, setActiveCol] = useState("request");
   const [showAllFinished, setShowAllFinished] = useState(false);
-  const [finishing, setFinishing] = useState(null);
+  const [moving, setMoving] = useState(null); // { task, target }
+  const [dragId, setDragId] = useState(null);
+  const [dropCol, setDropCol] = useState(null);
+  const draggable = useMemo(canDrag, []);
 
   const selected = id ? tasks.find((t) => t.id === id) : null;
   const closeDetail = useCallback(() => navigate("/tim"), [navigate]);
+  const isDesigner = member.role === "designer";
 
-  // Statistik selalu dari SEMUA task (tidak terpengaruh filter), supaya angkanya konsisten.
-  const stats = useMemo(() => {
-    const recentFinished = tasks.filter((t) => t.status === "finish" && t.finishedAt && daysBetween(t.finishedAt, new Date()) < FINISH_WINDOW_DAYS);
-    return [
-      { label: "Request baru", value: tasks.filter((t) => t.status === "request").length, hint: "menunggu diambil", color: "var(--amber-800)" },
-      { label: "Todo", value: tasks.filter((t) => t.status === "todo").length, hint: "sudah ada PIC" },
-      { label: "On Progress", value: tasks.filter((t) => t.status === "on_progress").length, hint: "sedang dikerjakan", color: "var(--brand-soil)" },
-      { label: "Terlambat", value: tasks.filter(isOverdue).length, hint: "lewat deadline", color: "var(--rose-700)" },
-      { label: `Selesai ${FINISH_WINDOW_DAYS} hari`, value: recentFinished.length, hint: "dengan link hasil", color: "var(--brand-primary)" },
-    ];
-  }, [tasks]);
-
-  // Beban kerja: task aktif di mana desainer ini PIC atau punya item checklist yang belum selesai.
-  const workload = DESIGNERS.map((d) => ({
-    ...d,
-    active: tasks.filter((t) => involves(t, d.name) && (t.status === "todo" || t.status === "on_progress")).length,
-  }));
+  // Angka ringkas selalu dari SEMUA task (tidak terpengaruh filter).
+  const recentFinished = (t) => t.finishedAt && daysBetween(t.finishedAt, new Date()) < FINISH_WINDOW_DAYS;
+  const chips = [
+    { key: "request", label: "Request", value: tasks.filter((t) => t.status === "request").length },
+    { key: "on_progress", label: "On Progress", value: tasks.filter((t) => t.status === "on_progress").length },
+    { key: "delay", label: "Delay", value: tasks.filter((t) => t.status === "delay").length },
+    { key: "late", label: "Terlambat", value: tasks.filter(isOverdue).length },
+    { key: "finish", label: `Selesai ${FINISH_WINDOW_DAYS} hari`, value: tasks.filter((t) => t.status === "finish" && recentFinished(t)).length },
+  ];
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tasks.filter(
       (t) =>
+        (!mine || involves(t, member.name)) &&
         (pic === "all" || involves(t, pic)) &&
         matchesDue(t, due) &&
-        (!q || [t.title, t.requesterName, t.division, t.category, t.pic].some((v) => v?.toLowerCase().includes(q)))
+        (!q || t.title.toLowerCase().includes(q))
     );
-  }, [tasks, query, pic, due]);
+  }, [tasks, query, mine, member.name, pic, due]);
 
   const columns = STATUSES.map((s) => {
     let items = filtered.filter((t) => t.status === s);
@@ -75,7 +73,7 @@ export default function BoardPage() {
     if (s === "finish") {
       items.sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt));
       if (!showAllFinished) {
-        const recent = items.filter((t) => t.finishedAt && daysBetween(t.finishedAt, new Date()) < FINISH_WINDOW_DAYS);
+        const recent = items.filter(recentFinished);
         hidden = items.length - recent.length;
         items = recent;
       }
@@ -85,63 +83,58 @@ export default function BoardPage() {
     return { status: s, items, hidden };
   });
 
-  const filtersActive = query || pic !== "all" || due !== "all";
+  const filtersActive = query || mine || pic !== "all" || due !== "all";
 
-  const cardHandlers = {
-    busy,
-    onAssign: (t, name) => run(() => actions.assignTask(t.id, name), `"${t.title}" diambil ${name}.`),
-    onStart: (t) => run(() => actions.startTask(t.id)),
-    onFinish: (t) => setFinishing(t),
-    onRevise: (t) => run(() => actions.reviseTask(t.id), "Task kembali ke On Progress untuk revisi."),
+  const take = (t, name) => run(() => actions.takeTask(t.id, name), `"${t.title}" diambil ${name}. Waktu kerja mulai berjalan.`);
+
+  // Geser kartu: pindah langsung bila tidak perlu isian; selain itu buka dialog dengan tujuan terpilih.
+  const drop = (status) => {
+    const t = tasks.find((x) => x.id === dragId);
+    setDragId(null);
+    setDropCol(null);
+    if (!t || t.status === status) return;
+    const needsDialog = status === "finish" || status === "delay" || (!t.pic && status !== "request");
+    if (needsDialog) setMoving({ task: t, target: status });
+    else run(() => actions.moveTask(t.id, status), `Dipindah ke ${STATUS[status].label}.`);
   };
 
   return (
     <>
-      <section aria-label="Ringkasan" className="stats">
-        {stats.map((s) => (
-          <div key={s.label} className="card stat">
-            <p className="small muted">{s.label}</p>
-            <p className="stat-value" style={{ color: s.color }}>{s.value}</p>
-            <p className="small muted">{s.hint}</p>
+      <section aria-label="Ringkasan" className="chips">
+        {chips.map((c) => (
+          <div key={c.key} className={`chip ${c.key === "late" ? "late" : ""}`}>
+            <span className={`dot dot-${c.key}`} />
+            <span className="label">{c.label}</span>
+            <strong>{c.value}</strong>
           </div>
         ))}
       </section>
 
-      <section aria-label="Beban kerja" className="workload">
-        {workload.map((d) => (
-          <button key={d.name} type="button" className="card workload-item" style={{ textAlign: "left", borderColor: pic === d.name ? d.color : undefined }} aria-pressed={pic === d.name} onClick={() => setPic(pic === d.name ? "all" : d.name)}>
-            <Avatar name={d.name} size={32} />
-            <span>
-              <span style={{ display: "block", fontWeight: 600 }}>{d.name}</span>
-              <span className="small muted">{d.active} task aktif</span>
-            </span>
-          </button>
-        ))}
-      </section>
-
-      <div className="row filter-bar" style={{ gap: 10 }}>
-        <label className="search">
-          <Search size={16} aria-hidden="true" />
-          <span className="sr-only">Cari task</span>
-          <input type="search" placeholder="Cari judul, requester, atau PIC" value={query} onChange={(e) => setQuery(e.target.value)} />
-        </label>
-        <div className="pills" role="group" aria-label="Filter PIC">
-          <button type="button" className="pill" aria-pressed={pic === "all"} onClick={() => setPic("all")}>Semua</button>
-          {DESIGNERS.map((d) => (
-            <button key={d.name} type="button" className="pill" aria-pressed={pic === d.name} onClick={() => setPic(d.name)}>{d.name}</button>
-          ))}
+      <div className="filter-bar">
+        {isDesigner && (
+          <div className="segmented" role="group" aria-label="Tampilkan">
+            <button type="button" aria-pressed={mine} onClick={() => setMine(true)}>Tugas saya</button>
+            <button type="button" aria-pressed={!mine} onClick={() => setMine(false)}>Semua</button>
+          </div>
+        )}
+        <div className="pills scroll-row" role="group" aria-label="Filter PIC">
+          {designers.map((d) => {
+            const count = tasks.filter((t) => t.status !== "finish" && involves(t, d.name)).length;
+            return (
+              <button key={d.email} type="button" className="pill pill-avatar" aria-pressed={pic === d.name} onClick={() => setPic(pic === d.name ? "all" : d.name)}>
+                <Avatar name={d.name} color={d.color} size={24} /> {d.name} ({count})
+              </button>
+            );
+          })}
         </div>
-        <label className="row small muted filter-select" style={{ gap: 6 }}>
-          <span className="hide-mobile">Deadline</span>
-          <select className="select" aria-label="Filter deadline" value={due} onChange={(e) => setDue(e.target.value)}>
-            <option value="all">Semua deadline</option>
-            <option value="today">Hari ini</option>
-            <option value="week">7 hari ke depan</option>
-            <option value="overdue">Terlambat</option>
-          </select>
-        </label>
+        <select className="select" aria-label="Filter deadline" value={due} onChange={(e) => setDue(e.target.value)}>
+          <option value="all">Semua deadline</option>
+          <option value="today">Deadline hari ini</option>
+          <option value="week">7 hari ke depan</option>
+          <option value="overdue">Terlambat</option>
+        </select>
         {filtersActive && (
-          <button type="button" className="btn btn-text" onClick={() => { setQuery(""); setPic("all"); setDue("all"); }}>
+          <button type="button" className="btn btn-text" onClick={() => { setMine(false); setPic("all"); setDue("all"); }}>
             Reset filter
           </button>
         )}
@@ -157,17 +150,44 @@ export default function BoardPage() {
 
       <section aria-label="Kanban" className="kanban">
         {columns.map((c) => (
-          <div key={c.status} className={`card column ${activeCol === c.status ? "active" : ""}`}>
+          <div
+            key={c.status}
+            className={`column column-${c.status} ${activeCol === c.status ? "active" : ""} ${dropCol === c.status ? "drop-target" : ""}`}
+            onDragOver={(e) => {
+              if (!dragId) return;
+              e.preventDefault();
+              if (dropCol !== c.status) setDropCol(c.status);
+            }}
+            onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget) && setDropCol(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              drop(c.status);
+            }}
+          >
             <div className="column-head">
-              <span>
-                <span style={{ fontWeight: 600 }}>{STATUS[c.status].label}</span>{" "}
-                {COLUMN_NOTE[c.status] && <span className="small muted">{COLUMN_NOTE[c.status]}</span>}
-              </span>
-              <span style={{ fontWeight: 600, color: "var(--zinc-700)" }}>{c.items.length}</span>
+              <span className={`dot dot-${c.status}`} style={{ width: 10, height: 10, borderRadius: 9999, display: "inline-block" }} />
+              <span style={{ fontWeight: 700 }}>{STATUS[c.status].label}</span>
+              <span className="small muted">{STATUS[c.status].note}</span>
+              <span className="count">{c.items.length}</span>
             </div>
             <div className="column-body">
               {c.items.length === 0 && <p className="column-empty">{filtersActive ? "Tidak ada yang cocok dengan filter." : "Kosong"}</p>}
-              {c.items.map((t) => <TaskCard key={t.id} task={t} {...cardHandlers} />)}
+              {c.items.map((t) => (
+                <TaskCard
+                  key={t.id}
+                  task={t}
+                  now={now}
+                  designers={designers}
+                  colorOf={colorOf}
+                  busy={busy}
+                  draggable={draggable}
+                  dragging={dragId === t.id}
+                  onDragStart={(task) => setDragId(task.id)}
+                  onDragEnd={() => { setDragId(null); setDropCol(null); }}
+                  onTake={take}
+                  onMove={(task) => setMoving({ task })}
+                />
+              ))}
               {c.status === "finish" && (c.hidden > 0 || showAllFinished) && (
                 <button type="button" className="btn btn-text" onClick={() => setShowAllFinished(!showAllFinished)}>
                   {showAllFinished ? `Tampilkan ${FINISH_WINDOW_DAYS} hari terakhir saja` : `Lihat ${c.hidden} task selesai lainnya`}
@@ -187,15 +207,29 @@ export default function BoardPage() {
           </div>
         </div>
       )}
-      {selected && <TaskDetail task={selected} run={run} busy={busy} onClose={closeDetail} onFinish={setFinishing} />}
-      {finishing && (
-        <FinishDialog
-          key={finishing.id}
-          task={tasks.find((t) => t.id === finishing.id) || finishing}
+      {selected && !moving && (
+        <TaskDetail
+          task={selected}
+          now={now}
+          designers={designers}
+          colorOf={colorOf}
           run={run}
           busy={busy}
-          onClose={() => setFinishing(null)}
-          onDone={() => setFinishing(null)}
+          onClose={closeDetail}
+          onTake={take}
+          onMove={(task, target) => setMoving({ task, target })}
+        />
+      )}
+      {moving && (
+        <MoveDialog
+          key={moving.task.id}
+          task={tasks.find((t) => t.id === moving.task.id) || moving.task}
+          initialTarget={moving.target}
+          designers={designers}
+          run={run}
+          busy={busy}
+          onClose={() => setMoving(null)}
+          onDone={() => setMoving(null)}
         />
       )}
     </>

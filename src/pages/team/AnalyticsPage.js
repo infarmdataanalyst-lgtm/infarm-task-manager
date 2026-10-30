@@ -1,9 +1,12 @@
-// /tim/analitik — ringkasan kinerja per periode dan beban kerja per desainer.
+// /tim/analitik — ringkasan kinerja per periode dan per desainer.
+// Tahap 2 v8: perbandingan per orang dengan minggu/bulan lalu (lihat mockup).
 
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { CATEGORIES, DESIGNERS, DIVISIONS } from "../../config";
-import { daysBetween, finishedOnTime, fmtShort, inRange, isOverdue, periodRange, toYMD } from "../../lib/dates";
+import { CATEGORIES, DIVISIONS } from "../../config";
+import { involves } from "../../data/taskModel";
+import { finishedOnTime, fmtShort, inRange, isOverdue, periodRange, toYMD } from "../../lib/dates";
+import { fmtDuration, taskWorkMinutes } from "../../lib/worktime";
 import { Avatar } from "../../components/ui";
 
 const PERIODS = [
@@ -13,15 +16,8 @@ const PERIODS = [
   ["custom", "Pilih tanggal"],
 ];
 
-const fmtDays = (n) => (n === null ? "-" : `${n.toFixed(1).replace(".0", "").replace(".", ",")} hari`);
-
-// Lama pengerjaan: dari diambil (atau mulai) sampai Finish.
-const avgDuration = (list) => {
-  const durations = list
-    .map((t) => (t.finishedAt ? daysBetween(t.assignedAt || t.startedAt || t.createdAt, t.finishedAt) : null))
-    .filter((d) => d !== null);
-  return durations.length ? durations.reduce((s, d) => s + d, 0) / durations.length : null;
-};
+// Rata-rata waktu kerja (jam kerja) per task selesai.
+const avgWork = (list) => (list.length ? fmtDuration(Math.round(list.reduce((s, t) => s + taskWorkMinutes(t), 0) / list.length)) : "-");
 
 const bars = (entries) => {
   const max = Math.max(1, ...entries.map((e) => e[1]));
@@ -29,7 +25,7 @@ const bars = (entries) => {
 };
 
 export default function AnalyticsPage() {
-  const { tasks } = useOutletContext();
+  const { tasks, designers } = useOutletContext();
   const [period, setPeriod] = useState("last30");
   const [custom, setCustom] = useState({ from: toYMD(new Date(Date.now() - 29 * 86400000)), to: toYMD(new Date()) });
 
@@ -53,30 +49,31 @@ export default function AnalyticsPage() {
           hint: finished.length ? `${Math.round((onTime / finished.length) * 100)}%` : "belum ada task selesai",
           color: "var(--brand-primary)",
         },
-        { label: "Rata-rata pengerjaan", value: fmtDays(avgDuration(finished)), hint: "dari diambil sampai Finish" },
+        { label: "Rata-rata waktu kerja", value: avgWork(finished), hint: "jam kerja Sen–Jum 08–17 per task" },
         { label: "Sedang terlambat", value: tasks.filter(isOverdue).length, hint: "task aktif lewat deadline (saat ini)", color: "var(--rose-700)" },
       ],
-      pics: DESIGNERS.map((d) => {
-        const mine = tasks.filter((t) => t.pic === d.name);
-        const todo = mine.filter((t) => t.status === "todo").length;
-        const prog = mine.filter((t) => t.status === "on_progress").length;
-        const done = finished.filter((t) => t.pic === d.name);
+      // Task bersama dihitung untuk PIC dan setiap pengerja checklist.
+      pics: designers.map((d) => {
+        const mine = tasks.filter((t) => t.pic === d.name || t.checklist.some((c) => c.assignee === d.name));
+        const prog = mine.filter((t) => t.status === "on_progress" && involves(t, d.name)).length;
+        const delay = mine.filter((t) => t.status === "delay" && involves(t, d.name)).length;
+        const done = finished.filter((t) => mine.includes(t));
         return {
           ...d,
-          active: todo + prog,
-          note: `Todo ${todo} · On Progress ${prog}`,
+          active: prog + delay,
+          note: `On Progress ${prog} · Delay ${delay}`,
           stats: [
             { label: "Selesai", value: done.length, color: "var(--brand-primary)" },
             { label: "Tepat waktu", value: done.length ? `${done.filter(finishedOnTime).length}/${done.length}` : "-" },
             { label: "Terlambat", value: mine.filter(isOverdue).length, color: mine.some(isOverdue) ? "var(--rose-700)" : undefined },
-            { label: "Rata-rata", value: fmtDays(avgDuration(done)) },
+            { label: "Rata-rata", value: avgWork(done) },
           ],
         };
       }),
       byCategory: count("category", CATEGORIES),
       byDivision: count("division", DIVISIONS),
     };
-  }, [tasks, range]);
+  }, [tasks, range, designers]);
 
   const maxActive = Math.max(1, ...data.pics.map((p) => p.active));
 
@@ -117,7 +114,7 @@ export default function AnalyticsPage() {
         {data.pics.map((p) => (
           <div key={p.name} className="card card-pad stack-lg">
             <div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
-              <Avatar name={p.name} size={32} />
+              <Avatar name={p.name} color={p.color} size={32} />
               <div>
                 <h2 className="h-section">{p.name}</h2>
                 <p className="small muted">{p.active} task aktif · {p.note}</p>

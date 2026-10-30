@@ -1,22 +1,63 @@
-// /request — form request desain untuk divisi lain, lalu konfirmasi "Request sudah masuk".
+// "/" — form request desain untuk divisi lain (tanpa login), lalu konfirmasi "Request sudah masuk".
+// Requester tidak bisa melihat board atau progres; konfirmasi menampilkan isian yang dikirim.
 
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { Check, LayoutList, Send } from "lucide-react";
+import { Check, FileText, Info, Send } from "lucide-react";
 import { CATEGORIES, DIVISIONS } from "../config";
 import { submitRequest } from "../data/taskActions";
-import { getTask } from "../data/taskStore";
 import { fmtDateTime, fmtDay, toYMD } from "../lib/dates";
-import { normalizeUrl } from "../lib/links";
-import { newId } from "../lib/images";
+import { displayUrl, normalizeUrl } from "../lib/links";
+import { fmtBytes, newId } from "../lib/images";
 import ReferenceEditor from "../components/ReferenceEditor";
-import { AppHeader, LocalModeBanner, ReferenceList, StatusBadge, useAction, useToast } from "../components/ui";
+import { AppHeader, LocalModeBanner, useAction, useToast } from "../components/ui";
 
 const EMPTY = { requesterName: "", division: DIVISIONS[0], title: "", category: CATEGORIES[0], dueDate: "", description: "" };
 
+function SentPage({ sent, onAgain }) {
+  return (
+    <main className="container container-form page">
+      <div className="row" style={{ gap: 14, flexWrap: "nowrap" }}>
+        <span className="success-icon"><Check size={24} strokeWidth={2.5} aria-hidden="true" /></span>
+        <div>
+          <h1 className="h-page">Request sudah masuk</h1>
+          <p style={{ color: "var(--zinc-700)" }}>Request langsung muncul di board tim desain. Simpan ringkasan ini kalau perlu.</p>
+        </div>
+      </div>
+      <section className="card sent-card">
+        <div className="card-top">
+          <span className="tag tag-category">{sent.category}</span>
+          <span className="small muted" style={{ marginLeft: "auto" }}>Deadline {fmtDay(sent.dueDate)}</span>
+        </div>
+        <h2 className="h-section">{sent.title}</h2>
+        <p className="small muted">{sent.requesterName} ({sent.division}) · dikirim {fmtDateTime(sent.createdAt)}</p>
+        {sent.description && <p style={{ color: "var(--zinc-700)", whiteSpace: "pre-line" }}>{sent.description}</p>}
+        <div className="stack" style={{ borderTop: "1px solid var(--zinc-100)", paddingTop: 10 }}>
+          <p className="eyebrow">Lampiran dan link yang dikirim</p>
+          {!sent.attachments.length && !sent.referenceLinks.length && <p className="muted">Tanpa lampiran dan link.</p>}
+          {sent.attachments.map((a) => (
+            <p key={a.id} className="row small" style={{ gap: 6 }}>
+              <FileText size={14} aria-hidden="true" /> {a.name} · {fmtBytes(a.size)}
+            </p>
+          ))}
+          {sent.referenceLinks.map((l) => (
+            <a key={l.id} className="small" href={l.url} target="_blank" rel="noopener noreferrer">{displayUrl(l.url)}</a>
+          ))}
+        </div>
+      </section>
+      <p className="callout-cream">
+        <Info size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>Ada yang kurang atau berubah? Hubungi Denny atau Arum langsung. Request yang sudah terkirim tidak bisa diedit dari form.</span>
+      </p>
+      <div className="row sent-actions">
+        <button type="button" className="btn btn-primary btn-cta" onClick={onAgain}>Kirim request lain</button>
+      </div>
+    </main>
+  );
+}
+
 export default function RequestPage() {
   const [form, setForm] = useState(EMPTY);
-  const [images, setImages] = useState([]);
+  const [attachments, setAttachments] = useState([]);
   const [links, setLinks] = useState([]);
   const [linkInput, setLinkInput] = useState("");
   const [sent, setSent] = useState(null);
@@ -30,10 +71,7 @@ export default function RequestPage() {
     let allLinks = links;
     if (linkInput.trim()) {
       const url = normalizeUrl(linkInput);
-      if (!url) {
-        showToast("Link referensi yang belum ditambahkan tidak valid. Perbaiki atau kosongkan dulu.", "error");
-        return;
-      }
+      if (!url) return showToast("Link referensi yang belum ditambahkan tidak valid. Perbaiki atau kosongkan dulu.", "error");
       allLinks = [...links, { id: newId(), url }];
     }
     const created = await run(() =>
@@ -42,19 +80,19 @@ export default function RequestPage() {
         title: form.title.trim(),
         requesterName: form.requesterName.trim(),
         description: form.description.trim(),
-        referenceImages: images.map(({ originalSize, ...img }) => img),
+        attachments,
         referenceLinks: allLinks,
       })
     );
     if (!created) return;
-    // Baca ulang dari penyimpanan: yang ditampilkan = yang benar-benar tersimpan.
-    setSent(await getTask(created.id));
+    setSent(created);
     window.scrollTo(0, 0);
   };
 
   const reset = () => {
+    attachments.forEach((a) => a.previewUrl && URL.revokeObjectURL(a.previewUrl));
     setForm(EMPTY);
-    setImages([]);
+    setAttachments([]);
     setLinks([]);
     setLinkInput("");
     setSent(null);
@@ -62,43 +100,9 @@ export default function RequestPage() {
 
   return (
     <>
-      <AppHeader title="Request desain" subtitle="Kirim kebutuhan desain ke Tim Desain infarm.id" narrow>
-        <Link to="/" className="btn btn-on-green" aria-label="Lihat status semua request">
-          <LayoutList size={16} aria-hidden="true" />
-          <span className="btn-label">Lihat status semua request</span>
-        </Link>
-      </AppHeader>
-
+      <AppHeader title="Request desain" subtitle="Kirim kebutuhan desain ke Tim Desain infarm.id" narrow />
       {sent ? (
-        <main className="container container-form page">
-          <div className="row" style={{ gap: 14, flexWrap: "nowrap", alignItems: "center" }}>
-            <span className="success-icon"><Check size={24} strokeWidth={2.5} aria-hidden="true" /></span>
-            <div>
-              <h1 className="h-page">Request sudah masuk</h1>
-              <p style={{ color: "var(--zinc-700)" }}>Tersimpan di sistem tim desain. Cek di bawah apakah referensimu terbaca dengan benar.</p>
-            </div>
-          </div>
-          <section className="card req-card">
-            <div className="card-top">
-              <StatusBadge status={sent.status} />
-              <span className="card-due">Deadline {fmtDay(sent.dueDate)}</span>
-            </div>
-            <h2 className="req-title">{sent.title}</h2>
-            <p className="small muted">{sent.category} · {sent.requesterName} ({sent.division}) · dikirim {fmtDateTime(sent.createdAt)}</p>
-            <p className="small" style={{ color: "var(--zinc-700)" }}>Sudah masuk. Menunggu diambil Denny atau Arum.</p>
-            <div className="req-detail">
-              <p className="eyebrow">Referensi yang diterima tim desain</p>
-              <ReferenceList task={sent} />
-              <p className="hint">Ada yang kurang? Klik <strong>Edit request</strong> di halaman status selama request belum mulai dikerjakan.</p>
-            </div>
-          </section>
-          <div className="row sent-actions">
-            <Link to="/" className="btn btn-primary btn-cta">Lihat di halaman status</Link>
-            <button type="button" className="btn btn-secondary btn-lg" onClick={reset}>
-              Kirim request lain
-            </button>
-          </div>
-        </main>
+        <SentPage sent={sent} onAgain={reset} />
       ) : (
         <main className="container container-narrow page">
           <LocalModeBanner />
@@ -136,18 +140,18 @@ export default function RequestPage() {
               <div className="field">
                 <label className="label" htmlFor="f-brief">Brief</label>
                 <textarea id="f-brief" className="textarea" rows={6} value={form.description} onChange={set("description")} aria-describedby="f-brief-hint" />
-                <p id="f-brief-hint" className="hint">Tulis ukuran, tone, teks yang wajib ada, dan tempat desain akan dipakai.</p>
+                <p id="f-brief-hint" className="hint">Tulis kebutuhan secara keseluruhan: ukuran, tone, teks yang wajib ada, dan tempat desain akan dipakai.</p>
               </div>
             </section>
 
             <aside className="side">
               <section className="card card-pad-lg stack" aria-labelledby="ref-heading">
-                <h2 id="ref-heading" className="h-section">Referensi</h2>
-                <p className="hint" style={{ marginTop: -4 }}>Upload gambar dan/atau tempel link.</p>
+                <h2 id="ref-heading" className="h-section">Lampiran dan referensi</h2>
+                <p className="hint" style={{ marginTop: -4 }}>Upload foto/PDF dan/atau tempel link.</p>
                 <ReferenceEditor
-                  images={images}
+                  attachments={attachments}
                   links={links}
-                  onImagesChange={setImages}
+                  onAttachmentsChange={setAttachments}
                   onLinksChange={setLinks}
                   linkInput={linkInput}
                   onLinkInputChange={setLinkInput}

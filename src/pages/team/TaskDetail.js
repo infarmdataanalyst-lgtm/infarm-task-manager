@@ -1,25 +1,60 @@
-// Panel detail task: panel kanan di desktop, layar penuh di HP.
+// Detail task: pop-up mengambang di tengah (desktop maks 760px, HP layar penuh).
+// Kanan atas: Edit (hijau), Hapus (merah, dengan konfirmasi), Tutup (abu-abu).
+// Isi: info, brief, lampiran & link, checklist per orang, link hasil, riwayat. Bawah: Pindah ke… + aksi utama.
 
 import React, { useEffect, useState } from "react";
-import { ArrowRight, Check, ExternalLink, History, Pencil, RotateCcw, Trash2, X } from "lucide-react";
-import { CATEGORIES, DESIGNERS, DIVISIONS } from "../../config";
+import { ArrowLeftRight, Check, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { CATEGORIES, DIVISIONS, STATUS } from "../../config";
 import * as actions from "../../data/taskActions";
-import { isUpdatedByRequester } from "../../data/taskModel";
-import { describeChange } from "../../lib/changes";
-import { daysLate, dueSoonLabel, fmtDate, fmtDateTime, fmtDay, isDueSoon, isOverdue } from "../../lib/dates";
-import { displayUrl, normalizeUrl } from "../../lib/links";
+import { helpers } from "../../data/taskModel";
+import { describeEntry } from "../../lib/changes";
+import { daysLate, fmtDateTime, fmtDay, isOverdue } from "../../lib/dates";
 import { newId } from "../../lib/images";
-import { Avatar, Modal, ReferenceList, StatusBadge, Stepper, referenceSummary } from "../../components/ui";
+import { displayUrl, normalizeUrl } from "../../lib/links";
+import { fmtDuration, isTimerRunning, taskWorkMinutes } from "../../lib/worktime";
+import { AttachmentList, Avatar, LinkList, Modal, StatusBadge } from "../../components/ui";
+
+function LinksEditor({ links, onChange, label }) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const add = () => {
+    const url = normalizeUrl(value);
+    if (!url) return setError("Link tidak valid.");
+    onChange([...links, { id: newId(), url }]);
+    setValue("");
+    setError("");
+  };
+  return (
+    <div className="stack">
+      {links.map((l) => (
+        <div key={l.id} className="link-row link-row-added">
+          <span className="url">{displayUrl(l.url)}</span>
+          <button type="button" className="icon-btn icon-btn-plain" style={{ color: "var(--rose-600)" }} aria-label={`Hapus ${displayUrl(l.url)}`} onClick={() => onChange(links.filter((x) => x.id !== l.id))}>
+            <X size={16} />
+          </button>
+        </div>
+      ))}
+      <div className="row" style={{ flexWrap: "nowrap" }}>
+        <input type="text" inputMode="url" className={`input grow ${error ? "input-invalid" : ""}`} placeholder="Tempel link" aria-label={label} value={value}
+          onChange={(e) => { setValue(e.target.value); setError(""); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+        <button type="button" className="btn btn-neutral" onClick={add}>Tambah</button>
+      </div>
+      {error && <p className="error-text">{error}</p>}
+    </div>
+  );
+}
 
 function EditForm({ task, run, busy, onDone }) {
   const [f, setF] = useState({
     title: task.title, category: task.category, division: task.division,
     requesterName: task.requesterName, dueDate: task.dueDate, description: task.description,
   });
+  const [refs, setRefs] = useState(task.referenceLinks);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = async (e) => {
     e.preventDefault();
-    if (await run(() => actions.editTask(task.id, { ...f, title: f.title.trim() }), "Perubahan disimpan.")) onDone();
+    if (await run(() => actions.editTask(task.id, { ...f, title: f.title.trim(), referenceLinks: refs }), "Perubahan disimpan.")) onDone();
   };
   return (
     <form className="card card-pad stack-lg" style={{ background: "var(--brand-surface)" }} onSubmit={save}>
@@ -30,28 +65,28 @@ function EditForm({ task, run, busy, onDone }) {
       <div className="grid-2 keep">
         <div className="field">
           <label className="label" htmlFor="e-cat">Kategori</label>
-          <select id="e-cat" className="select" value={f.category} onChange={set("category")}>
-            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-          </select>
+          <select id="e-cat" className="select" value={f.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
         </div>
         <div className="field">
           <label className="label" htmlFor="e-due">Deadline</label>
           <input id="e-due" type="date" className="input" required value={f.dueDate} onChange={set("dueDate")} />
         </div>
         <div className="field">
-          <label className="label" htmlFor="e-name">Nama requester</label>
+          <label className="label" htmlFor="e-name">Requester</label>
           <input id="e-name" className="input" value={f.requesterName} onChange={set("requesterName")} />
         </div>
         <div className="field">
           <label className="label" htmlFor="e-div">Divisi</label>
-          <select id="e-div" className="select" value={f.division} onChange={set("division")}>
-            {DIVISIONS.map((d) => <option key={d}>{d}</option>)}
-          </select>
+          <select id="e-div" className="select" value={f.division} onChange={set("division")}>{DIVISIONS.map((d) => <option key={d}>{d}</option>)}</select>
         </div>
       </div>
       <div className="field">
         <label className="label" htmlFor="e-desc">Brief</label>
-        <textarea id="e-desc" className="textarea" value={f.description} onChange={set("description")} />
+        <textarea id="e-desc" className="textarea" rows={5} value={f.description} onChange={set("description")} />
+      </div>
+      <div className="field">
+        <p className="label">Link referensi</p>
+        <LinksEditor links={refs} onChange={setRefs} label="Link referensi baru" />
       </div>
       <div className="row">
         <button type="submit" className="btn btn-primary" disabled={busy}>Simpan</button>
@@ -61,47 +96,16 @@ function EditForm({ task, run, busy, onDone }) {
   );
 }
 
-// Edit dari requester (riwayat "diedit"), terbaru di atas.
-function RequesterChanges({ task }) {
-  const [entries, setEntries] = useState([]);
-  useEffect(() => {
-    let alive = true;
-    actions
-      .listHistory(task.id)
-      .then((list) => alive && setEntries(list.filter((h) => h.actor === "requester" && h.action === "diedit")))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [task.id, task.requesterUpdatedAt]);
-  if (!entries.length) return null;
-  return (
-    <section className="stack requester-changes">
-      <h3 className="eyebrow row" style={{ gap: 6 }}><History size={14} aria-hidden="true" /> Perubahan dari requester</h3>
-      {entries.map((h) => (
-        <div key={h.id} className="history-entry stack" style={{ gap: 4 }}>
-          <p className="small" style={{ fontWeight: 600 }}>{fmtDateTime(h.createdAt)} <span className="muted" style={{ fontWeight: 400 }}>· oleh {task.requesterName || "requester"}</span></p>
-          <ul className="change-list">
-            {h.changes.map((c) => {
-              const { label, text } = describeChange(c);
-              return <li key={c.field}><span className="change-label">{label}</span><span>{text}</span></li>;
-            })}
-          </ul>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-function Checklist({ task, run }) {
+function Checklist({ task, designers, colorOf, run }) {
   const [text, setText] = useState("");
-  const [assignee, setAssignee] = useState(task.pic || DESIGNERS[0].name);
+  const [assignee, setAssignee] = useState(task.pic || designers[0]?.name || "");
   const done = task.checklist.filter((c) => c.done).length;
-  // Progres per desainer, ditampilkan bila checklist dibagi ke lebih dari satu orang.
-  const people = DESIGNERS.map((d) => {
-    const mine = task.checklist.filter((c) => c.assignee === d.name);
-    return { name: d.name, total: mine.length, done: mine.filter((c) => c.done).length };
-  }).filter((p) => p.total > 0);
+  const people = designers
+    .map((d) => {
+      const mine = task.checklist.filter((c) => c.assignee === d.name);
+      return { ...d, total: mine.length, done: mine.filter((c) => c.done).length };
+    })
+    .filter((p) => p.total > 0);
   const add = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -109,31 +113,20 @@ function Checklist({ task, run }) {
   };
   return (
     <section className="stack">
-      <div className="row-between">
-        <h3 className="eyebrow">Checklist</h3>
-        {task.checklist.length > 0 && <span className="small muted">{done} dari {task.checklist.length} selesai</span>}
+      <div className="row" style={{ gap: 12 }}>
+        <h3 className="eyebrow">Checklist{task.checklist.length ? ` (${done} dari ${task.checklist.length})` : ""}</h3>
+        {people.map((p) => (
+          <span key={p.email} className="row small" style={{ gap: 4 }}><Avatar name={p.name} color={p.color} size={18} />{p.name} {p.done}/{p.total}</span>
+        ))}
       </div>
-      {people.length > 1 && (
-        <p className="row small" style={{ gap: 12 }}>
-          {people.map((p) => (
-            <span key={p.name} className="row" style={{ gap: 6 }}>
-              <Avatar name={p.name} size={20} /> {p.name} {p.done}/{p.total}
-            </span>
-          ))}
-        </p>
-      )}
       {task.checklist.map((c) => (
         <div key={c.id} className={`check-item ${c.done ? "done" : ""}`}>
-          <input
-            type="checkbox"
-            className="checkbox"
-            id={`chk-${c.id}`}
-            checked={c.done}
-            onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { done: e.target.checked }))}
-          />
+          <input type="checkbox" className="checkbox" id={`chk-${c.id}`} checked={c.done}
+            onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { done: e.target.checked }))} />
           <label className="text" htmlFor={`chk-${c.id}`}>{c.text}</label>
-          <select aria-label={`Dikerjakan oleh (${c.text})`} value={c.assignee || ""} onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { assignee: e.target.value }))}>
-            {DESIGNERS.map((d) => <option key={d.name}>{d.name}</option>)}
+          <select aria-label={`Dikerjakan oleh (${c.text})`} value={c.assignee || ""} style={{ color: colorOf(c.assignee) }}
+            onChange={(e) => run(() => actions.updateChecklistItem(task.id, c.id, { assignee: e.target.value }))}>
+            {designers.map((d) => <option key={d.email} value={d.name}>{d.name}</option>)}
           </select>
           <button type="button" className="icon-btn icon-btn-plain" aria-label={`Hapus "${c.text}"`} onClick={() => run(() => actions.removeChecklistItem(task.id, c.id))}>
             <X size={16} />
@@ -143,7 +136,7 @@ function Checklist({ task, run }) {
       <form className="row" style={{ flexWrap: "nowrap" }} onSubmit={add}>
         <input className="input grow" placeholder="Tambah item checklist" aria-label="Item checklist baru" value={text} onChange={(e) => setText(e.target.value)} style={{ background: "var(--brand-surface)" }} />
         <select className="select" style={{ width: "auto" }} aria-label="Dikerjakan oleh" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-          {DESIGNERS.map((d) => <option key={d.name}>{d.name}</option>)}
+          {designers.map((d) => <option key={d.email} value={d.name}>{d.name}</option>)}
         </select>
         <button type="submit" className="btn btn-neutral">Tambah</button>
       </form>
@@ -151,136 +144,108 @@ function Checklist({ task, run }) {
   );
 }
 
-function ResultLinks({ task, run }) {
-  const [value, setValue] = useState("");
-  const [error, setError] = useState("");
-  if (task.status !== "finish") {
-    return <p className="empty-box">Belum ada. Link hasil diminta saat task dipindah ke Finish.</p>;
-  }
-  const add = async (e) => {
-    e.preventDefault();
-    const url = normalizeUrl(value);
-    if (!url) return setError("Link tidak valid.");
-    if (await run(() => actions.setResultLinks(task.id, [...task.resultLinks, { id: newId(), url }]))) {
-      setValue("");
-      setError("");
-    }
-  };
+function History({ task }) {
+  const [entries, setEntries] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    actions.listHistory(task.id).then((list) => alive && setEntries(list)).catch(() => alive && setEntries([]));
+    return () => {
+      alive = false;
+    };
+  }, [task.id, task.updatedAt, task.checklist]);
   return (
-    <div className="stack">
-      {task.resultLinks.map((l) => (
-        <div key={l.id} className="link-row link-row-added">
-          <a href={l.url} target="_blank" rel="noopener noreferrer" className="url" style={{ fontWeight: 600, textDecoration: "none" }}>
-            <ExternalLink size={14} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 6 }} />
-            {displayUrl(l.url)}
-          </a>
-          {task.resultLinks.length > 1 && (
-            <button type="button" className="icon-btn icon-btn-plain" style={{ color: "var(--rose-600)" }} aria-label={`Hapus link ${displayUrl(l.url)}`} onClick={() => run(() => actions.setResultLinks(task.id, task.resultLinks.filter((x) => x.id !== l.id)))}>
-              <X size={16} />
-            </button>
-          )}
-        </div>
-      ))}
-      <form className="row" style={{ flexWrap: "nowrap" }} onSubmit={add}>
-        <input type="text" inputMode="url" className={`input grow ${error ? "input-invalid" : ""}`} placeholder="Tambah link hasil lain" aria-label="Link hasil baru" value={value} onChange={(e) => { setValue(e.target.value); setError(""); }} />
-        <button type="submit" className="btn btn-neutral">Tambah</button>
-      </form>
-      {error && <p className="error-text">{error}</p>}
-    </div>
+    <section className="stack">
+      <h3 className="eyebrow">Riwayat</h3>
+      {entries === null && <p className="muted">Memuat…</p>}
+      {entries?.length === 0 && <p className="muted">Belum ada riwayat.</p>}
+      <ul className="history" style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {(entries || []).map((h) => {
+          const d = describeEntry(h);
+          return (
+            <li key={h.id}>
+              <span className="when">{fmtDateTime(h.createdAt)}</span>
+              <span className="grow"><strong>{d.who}</strong> {d.what}{d.details && <span className="muted"> · {d.details}</span>}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
-export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
+export default function TaskDetail({ task, now, designers, colorOf, run, busy, onClose, onTake, onMove }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [changingPic, setChangingPic] = useState(false);
+  const [editingResults, setEditingResults] = useState(false);
 
   useEffect(() => {
     setEditing(false);
     setConfirmDelete(false);
-    setChangingPic(false);
+    setEditingResults(false);
   }, [task.id]);
 
-  // Membuka detail = tim sudah melihat perubahan dari requester; badge di kartu hilang.
-  useEffect(() => {
-    if (isUpdatedByRequester(task)) actions.markSeen(task.id).catch(() => {});
-  }, [task]);
-
-  useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && !confirmDelete && onClose();
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [onClose, confirmDelete]);
-
   const late = isOverdue(task);
+  const minutes = taskWorkMinutes(task, now);
+  const running = isTimerRunning(task);
+  const others = helpers(task);
+  const move = (status, message) => run(() => actions.moveTask(task.id, status), message);
 
   return (
     <>
-      <div className="overlay" onClick={onClose} aria-hidden="true" />
-      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-        <div className="drawer-head">
-          <div className="row">
+      <Modal labelledBy="detail-title" onClose={() => !confirmDelete && onClose()} className="detail">
+        <div className="detail-head">
+          <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
             <StatusBadge status={task.status} />
             {late && <span className="badge badge-late">Terlambat {daysLate(task)} hari</span>}
-            {!late && isDueSoon(task) && <span className="badge badge-soon">{dueSoonLabel(task)}</span>}
-            <button type="button" className="icon-btn" style={{ marginLeft: "auto" }} aria-label="Tutup detail" onClick={onClose}>
-              <X size={18} />
-            </button>
+            <span className={`tag ${late ? "tag-due late" : "tag-due"}`} style={{ marginLeft: 0 }}>Deadline {fmtDay(task.dueDate)}</span>
+            <div className="detail-icons">
+              <button type="button" className="icon-btn icon-btn-edit" aria-label="Edit task" title="Edit" disabled={editing} onClick={() => setEditing(true)}><Pencil size={17} /></button>
+              <button type="button" className="icon-btn icon-btn-delete" aria-label="Hapus task" title="Hapus" onClick={() => setConfirmDelete(true)}><Trash2 size={17} /></button>
+              <button type="button" className="icon-btn icon-btn-close" aria-label="Tutup" title="Tutup" onClick={onClose}><X size={18} /></button>
+            </div>
           </div>
-          <h2 id="detail-title" className="h-section">{task.title}</h2>
-          <p className="small muted">{task.category} · dikirim {fmtDate(task.createdAt)}</p>
-          <Stepper status={task.status} />
+          <h2 id="detail-title" style={{ fontSize: 18, fontWeight: 700 }}>{task.title}</h2>
+          <p className="muted">{task.category} · {task.requesterName} ({task.division}) · masuk {fmtDateTime(task.createdAt)}</p>
         </div>
 
-        <div className="drawer-body">
+        <div className="detail-body">
           {editing ? (
             <EditForm task={task} run={run} busy={busy} onDone={() => setEditing(false)} />
           ) : (
             <>
               <dl className="info-grid">
-                <div><dt>Requester</dt><dd>{task.requesterName} · {task.division}</dd></div>
-                <div><dt>Deadline</dt><dd style={{ color: late ? "var(--rose-700)" : undefined }}>{fmtDay(task.dueDate)}</dd></div>
                 <div>
                   <dt>PIC</dt>
-                  <dd className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                    {task.pic && <Avatar name={task.pic} size={20} />}
-                    {changingPic && task.status !== "request" ? (
-                      <select
-                        className="select"
-                        style={{ minHeight: 30, padding: "0 6px", fontWeight: 600 }}
-                        aria-label="Ganti PIC"
-                        autoFocus
-                        value={task.pic || ""}
-                        onBlur={() => setChangingPic(false)}
-                        onChange={async (e) => {
-                          const v = e.target.value;
-                          setChangingPic(false);
-                          if (v === "__release") await run(() => actions.backToRequest(task.id), "PIC dilepas, task kembali ke Request.");
-                          else await run(() => actions.changePic(task.id, v), `PIC diganti ke ${v}.`);
-                        }}
-                      >
-                        {DESIGNERS.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
-                        <option value="__release">Lepas PIC (kembali ke Request)</option>
-                      </select>
-                    ) : (
+                  <dd>
+                    {task.pic ? (
                       <>
-                        <span className="grow">{task.pic || "Belum ada"}</span>
-                        {task.status !== "request" && (
-                          <button type="button" className="btn btn-text btn-sm" style={{ minHeight: 24, padding: "0 4px" }} onClick={() => setChangingPic(true)}>Ganti</button>
-                        )}
+                        <Avatar name={task.pic} color={colorOf(task.pic)} size={22} />
+                        <select className="select" style={{ minHeight: 28, padding: "0 4px", fontWeight: 700, border: 0, background: "transparent", width: "auto" }} aria-label="Ganti PIC" value={task.pic}
+                          onChange={(e) => run(() => actions.changePic(task.id, e.target.value), `PIC diganti ke ${e.target.value}.`)}>
+                          {designers.map((d) => <option key={d.email} value={d.name}>{d.name}</option>)}
+                          {!designers.some((d) => d.name === task.pic) && <option value={task.pic}>{task.pic}</option>}
+                        </select>
                       </>
-                    )}
+                    ) : "Belum ada"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Dikerjakan bersama</dt>
+                  <dd>{others.length ? others.map((n) => <span key={n} className="row" style={{ gap: 4 }}><Avatar name={n} color={colorOf(n)} size={22} />{n}</span>) : "-"}</dd>
+                </div>
+                <div>
+                  <dt>Waktu kerja</dt>
+                  <dd style={{ color: running ? "var(--brand-primary)" : undefined }}>
+                    {fmtDuration(minutes)}{running && <span className="small muted" style={{ fontWeight: 600 }}>· berjalan</span>}
                   </dd>
                 </div>
                 <div>
                   <dt>{task.status === "finish" ? "Selesai" : "Mulai dikerjakan"}</dt>
-                  <dd>{fmtDate(task.status === "finish" ? task.finishedAt : task.startedAt)}</dd>
+                  <dd>{fmtDateTime(task.status === "finish" ? task.finishedAt : task.startedAt)}</dd>
                 </div>
               </dl>
+              <p className="hint" style={{ marginTop: -10 }}>Waktu kerja dihitung Senin–Jumat 08.00–17.00 selama task di On Progress; berhenti di Delay dan Finish.</p>
+              {task.status === "delay" && task.delayReason && <p className="delay-note">Ditunda: {task.delayReason}</p>}
               <section className="stack">
                 <h3 className="eyebrow">Brief</h3>
                 <p style={{ color: "var(--zinc-700)", whiteSpace: "pre-line" }}>{task.description || "Tidak ada brief."}</p>
@@ -288,81 +253,77 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
             </>
           )}
 
-          <RequesterChanges task={task} />
+          <section className="stack">
+            <h3 className="eyebrow">Lampiran ({task.attachments.length} dari 5)</h3>
+            <AttachmentList task={task} />
+            {!editing && <LinkList links={task.referenceLinks} />}
+          </section>
+
+          <Checklist key={task.id} task={task} designers={designers} colorOf={colorOf} run={run} />
 
           <section className="stack">
             <div className="row-between">
-              <h3 className="eyebrow">Referensi dari requester</h3>
-              {task.status === "finish" && task.referenceImages.length > 0 ? (
-                <button type="button" className="btn btn-danger-text btn-sm" onClick={() => run(() => actions.deleteReferenceImages(task.id), "Gambar referensi dihapus.")}>
-                  <Trash2 size={14} aria-hidden="true" /> Hapus gambar
-                </button>
-              ) : (
-                <span className="small muted">{referenceSummary(task)}</span>
-              )}
+              <h3 className="eyebrow">Link hasil desain</h3>
+              {task.status === "finish" && !editingResults && <button type="button" className="btn btn-text btn-sm" onClick={() => setEditingResults(true)}>Ubah</button>}
             </div>
-            <ReferenceList task={task} />
+            {editingResults ? (
+              <>
+                <LinksEditor links={task.resultLinks} label="Link hasil baru"
+                  onChange={(links) => links.length ? run(() => actions.setResultLinks(task.id, links)) : run(() => Promise.reject(new Error("Task Finish wajib punya minimal satu link hasil.")))} />
+                <button type="button" className="btn btn-neutral" style={{ alignSelf: "flex-start" }} onClick={() => setEditingResults(false)}>Selesai mengubah</button>
+              </>
+            ) : (
+              <LinkList links={task.resultLinks} emptyText="Belum ada. Link hasil diminta saat task dipindah ke Finish." />
+            )}
           </section>
 
-          <Checklist key={task.id} task={task} run={run} />
-
-          <section className="stack">
-            <h3 className="eyebrow">Link hasil desain</h3>
-            <ResultLinks task={task} run={run} />
-          </section>
+          <History task={task} />
         </div>
 
-        <div className="drawer-foot">
-          {task.status === "request" && (
-            <div className="grid-2 keep" style={{ width: "100%", gap: 8 }}>
-              {DESIGNERS.map((d, i) => (
-                <button key={d.name} type="button" className={`btn btn-lg ${i % 2 ? "btn-outline-soil" : "btn-outline"}`} disabled={busy} onClick={() => run(() => actions.assignTask(task.id, d.name), `Diambil ${d.name}.`)}>
+        <div className="detail-foot">
+          {task.status === "request" ? (
+            <div className="grid-2 keep primary" style={{ gap: 8 }}>
+              {designers.map((d) => (
+                <button key={d.email} type="button" className="btn btn-lg btn-outline" style={{ borderColor: d.color, color: d.color }} disabled={busy} onClick={() => onTake(task, d.name)}>
                   Ambil: {d.name}
                 </button>
               ))}
             </div>
+          ) : (
+            <>
+              <button type="button" className="btn btn-secondary btn-lg move" onClick={() => onMove(task)}>
+                <ArrowLeftRight size={16} aria-hidden="true" /> Pindah ke…
+              </button>
+              {task.status === "on_progress" && (
+                <button type="button" className="btn btn-primary btn-cta primary" disabled={busy} onClick={() => onMove(task, "finish")}>
+                  <Check size={18} aria-hidden="true" /> Selesai, kirim link hasil
+                </button>
+              )}
+              {task.status === "delay" && (
+                <button type="button" className="btn btn-primary btn-cta primary" disabled={busy} onClick={() => move("on_progress", "Dilanjutkan. Waktu kerja berjalan lagi.")}>
+                  <Play size={18} aria-hidden="true" /> Lanjutkan ({STATUS.on_progress.label})
+                </button>
+              )}
+              {task.status === "finish" && (
+                <button type="button" className="btn btn-primary btn-cta primary" disabled={busy} onClick={() => move("on_progress", "Revisi dibuka. Task kembali ke On Progress.")}>
+                  <RotateCcw size={18} aria-hidden="true" /> Revisi: kembali ke On Progress
+                </button>
+              )}
+            </>
           )}
-          {task.status === "todo" && (
-            <button type="button" className="btn btn-primary btn-cta btn-block" disabled={busy} onClick={() => run(() => actions.startTask(task.id))}>
-              <ArrowRight size={18} aria-hidden="true" /> Mulai kerjakan
-            </button>
-          )}
-          {task.status === "on_progress" && (
-            <button type="button" className="btn btn-primary btn-cta btn-block" disabled={busy} onClick={() => onFinish(task)}>
-              <Check size={18} aria-hidden="true" /> Selesai, kirim link hasil
-            </button>
-          )}
-          {task.status === "finish" && (
-            <button type="button" className="btn btn-primary btn-cta btn-block" disabled={busy} onClick={() => run(() => actions.reviseTask(task.id), "Task kembali ke On Progress untuk revisi.")}>
-              <RotateCcw size={18} aria-hidden="true" /> Revisi: kembali ke On Progress
-            </button>
-          )}
-          <div className="row" style={{ width: "100%", justifyContent: "space-between" }}>
-            <button type="button" className="btn btn-secondary" disabled={editing} onClick={() => setEditing(true)}>
-              <Pencil size={16} aria-hidden="true" /> Edit
-            </button>
-            <button type="button" className="btn btn-danger-text" onClick={() => setConfirmDelete(true)}>
-              <Trash2 size={16} aria-hidden="true" /> Hapus task
-            </button>
-          </div>
         </div>
-      </aside>
+      </Modal>
 
       {confirmDelete && (
         <Modal labelledBy="delete-title" onClose={() => setConfirmDelete(false)}>
           <h2 id="delete-title" className="h-section">Hapus task ini?</h2>
-          <p>"{task.title}" akan dihapus permanen, termasuk referensi, checklist, dan riwayatnya. Requester juga tidak akan melihatnya lagi di halaman status.</p>
+          <p>"{task.title}" akan hilang dari board. Data dan riwayatnya tetap tersimpan, dan admin bisa memulihkannya.</p>
           <div className="modal-actions">
             <button type="button" className="btn btn-neutral" onClick={() => setConfirmDelete(false)}>Batal</button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              disabled={busy}
+            <button type="button" className="btn btn-danger" disabled={busy}
               onClick={async () => {
-                const ok = await run(() => actions.deleteTask(task.id).then(() => true), "Task dihapus.");
-                if (ok) onClose();
-              }}
-            >
+                if (await run(() => actions.deleteTask(task.id), "Task dihapus (diarsipkan).")) onClose();
+              }}>
               <Trash2 size={16} aria-hidden="true" /> Ya, hapus
             </button>
           </div>
@@ -371,4 +332,3 @@ export default function TaskDetail({ task, run, busy, onClose, onFinish }) {
     </>
   );
 }
-

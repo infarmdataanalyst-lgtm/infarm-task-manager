@@ -1,45 +1,33 @@
-// Penyimpanan task di Supabase (database bersama + Storage untuk gambar referensi).
+// Penyimpanan task di Supabase (database bersama + Storage untuk lampiran).
 // Antarmuka fungsinya sama persis dengan localStore.js. Skema & aturan akses: supabase/schema.sql.
 //
-// - Requester (tanpa PIN): baca semua task, buat request baru, upload gambar referensi,
-//   edit request lewat RPC requester_update_task (server menolak bila sudah On Progress/Finish).
-// - Tim (dengan PIN): semua perubahan lewat RPC team_*; PIN dicek di server.
-// - Checklist ada di tabel task_checklist (1 baris per item), di-embed ke task saat dibaca.
+// - Requester (tanpa login): hanya createTask (upload lampiran + insert, tanpa membaca balik).
+// - Anggota tim (login Google): baca dan ubah langsung; database yang menegakkan aturan,
+//   mencatat riwayat, dan membuka/menutup sesi waktu kerja (trigger).
 
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_KEY, SUPABASE_URL } from "../config";
-import { clearPin, getPin } from "../lib/pin";
+import { STORAGE_MODE } from "../config";
 import { newId } from "../lib/images";
+import { db } from "./supabaseClient";
 import { fromRow, normalizeChecklistItem, normalizeTask, toRow } from "./taskModel";
 
 const BUCKET = "references";
 const LIST_LIMIT = 500;
-const SELECT_TASK = "*, checklist:task_checklist(*)";
-
-let client = null;
-const db = () => {
-  if (!client) client = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
-  return client;
-};
+const SELECT_TASK = "*, checklist:task_checklist(*), workSessions:work_sessions(started_at, ended_at)";
 
 // ─── Pesan error yang bisa dipahami pengguna ────────────────────
 
 function friendlyError(error) {
-  const msg = `${error?.message || ""} ${error?.details || ""}`;
-  if (msg.includes("invalid_pin")) {
-    clearPin();
-    window.dispatchEvent(new Event("infarm:pin-invalid"));
-    return new Error("PIN tim salah atau sudah diganti. Masukkan PIN lagi.");
-  }
-  if (msg.includes("tasks_pic_wajib")) return new Error("Task harus punya PIC sebelum masuk Todo.");
+  const msg = `${error?.message || ""} ${error?.details || ""} ${error?.code || ""}`;
+  if (msg.includes("tasks_pic_wajib")) return new Error("Pilih PIC dulu sebelum memindah task dari Request.");
   if (msg.includes("tasks_link_hasil_wajib")) return new Error("Isi minimal satu link hasil desain.");
-  if (msg.includes("task_not_found")) return new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
-  if (msg.includes("checklist_not_found")) return new Error("Item checklist tidak ditemukan. Mungkin sudah dihapus.");
-  if (msg.includes("edit_locked")) return new Error("Request ini sudah mulai dikerjakan, jadi tidak bisa diedit lagi. Hubungi PIC-nya langsung.");
-  if (msg.includes("no_changes")) return new Error("Belum ada perubahan.");
-  if (msg.includes("too_many_images")) return new Error("Maksimal 6 gambar per request.");
-  if (msg.includes("task_checklist_text_check")) return new Error("Isi teks item checklist.");
-  if (msg.includes("row-level security") || msg.includes("permission denied")) return new Error("Aksi ini tidak diizinkan.");
+  if (msg.includes("tasks_lampiran_maks")) return new Error("Maksimal 5 lampiran per request.");
+  if (msg.includes("task_terhapus")) return new Error("Task ini sudah dihapus. Hanya admin yang bisa memulihkannya.");
+  if (msg.includes("PGRST116")) return new Error("Task tidak ditemukan atau kamu tidak punya akses.");
+  if (msg.includes("JWT") || msg.includes("PGRST301")) return new Error("Sesi login berakhir. Muat ulang halaman lalu masuk lagi.");
+  if (msg.includes("row-level security") || msg.includes("permission denied") || msg.includes("42501")) {
+    return new Error("Aksi ini tidak diizinkan untuk akunmu.");
+  }
+  if (msg.includes("Payload too large") || msg.includes("exceeded the maximum")) return new Error("File terlalu besar (maks 5 MB).");
   if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) return new Error("Tidak bisa terhubung ke server. Periksa koneksi internet lalu coba lagi.");
   return new Error(error?.message || "Terjadi kesalahan di server. Coba lagi.");
 }
@@ -80,34 +68,51 @@ function ensureRealtime() {
     .subscribe();
 }
 
+// Setelah login/keluar: buang cache dan ambil ulang dengan hak akses yang baru.
+if (STORAGE_MODE === "supabase") {
+  db().auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+      cache = null;
+      if (listeners.size) fetchAll().then(notify).catch(() => {});
+    }
+  });
+}
+
 const replaceInCache = (task) => {
   cache = cache ? (cache.some((t) => t.id === task.id) ? cache.map((t) => (t.id === task.id ? task : t)) : [task, ...cache]) : [task];
   notify();
 };
 
-// Baris dari RPC tidak membawa checklist; pakai checklist yang sudah ada di cache.
-const withChecklist = (row, current) => ({ ...fromRow(row), checklist: current?.checklist || [] });
+// ─── Lampiran ───────────────────────────────────────────────────
 
-// ─── Gambar referensi ───────────────────────────────────────────
-
-async function uploadImage(taskId, img) {
-  const blob = await (await fetch(img.dataUrl)).blob();
-  const path = `${taskId}/${img.id}.jpg`;
-  must(await db().storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));
-  const { data } = db().storage.from(BUCKET).getPublicUrl(path);
-  return { id: img.id, name: img.name, size: img.size, path, url: data.publicUrl };
+async function uploadBlob(path, blob, contentType) {
+  must(await db().storage.from(BUCKET).upload(path, blob, { contentType, cacheControl: "31536000", upsert: false }));
+  return db().storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-async function removeImages(images) {
-  const paths = images.map((i) => i.path).filter(Boolean);
+// Lampiran draf (punya blob) → objek tersimpan { id, name, size, type, path, url, thumbPath, thumbUrl }.
+async function uploadAttachment(taskId, a) {
+  const ext = a.type === "pdf" ? "pdf" : "jpg";
+  const path = `${taskId}/${a.id}.${ext}`;
+  const url = await uploadBlob(path, a.blob, a.type === "pdf" ? "application/pdf" : "image/jpeg");
+  let thumbPath = null;
+  let thumbUrl = null;
+  if (a.thumbBlob) {
+    thumbPath = `${taskId}/${a.id}-thumb.jpg`;
+    thumbUrl = await uploadBlob(thumbPath, a.thumbBlob, "image/jpeg");
+  }
+  return { id: a.id, name: a.name, size: a.size, type: a.type, path, url, thumbPath, thumbUrl };
+}
+
+const attachmentPaths = (list) => list.flatMap((a) => [a.path, a.thumbPath]).filter(Boolean);
+
+async function removeFiles(paths) {
   if (!paths.length) return;
   // Kalau gagal, task tetap benar; file yatim bisa dibersihkan belakangan.
   await db().storage.from(BUCKET).remove(paths).catch(() => {});
 }
 
 // ─── API publik (sama dengan localStore.js) ─────────────────────
-
-export class StorageFullError extends Error {}
 
 export async function listTasks() {
   ensureRealtime();
@@ -129,77 +134,38 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+// Requester mengirim request. Requester tidak bisa membaca tabel, jadi yang dikembalikan
+// adalah isian yang dikirim (dipakai halaman "Request sudah masuk").
 export async function createTask(input) {
   const id = newId();
-  const images = [];
-  for (const img of input.referenceImages || []) images.push(await uploadImage(id, img));
-  const task = normalizeTask({ ...input, id, status: "request", pic: null, referenceImages: images });
-  const { createdAt, updatedAt, assignedAt, startedAt, finishedAt, referenceImagesDeletedAt, requesterUpdatedAt, picSeenAt, checklist, ...fields } = task;
-  const row = must(await db().from("tasks").insert(toRow(fields)).select().single());
-  const created = fromRow(row);
-  replaceInCache(created);
-  return created;
-}
-
-async function removeUnusedImages(before, after) {
-  const kept = new Set(after.referenceImages.map((i) => i.path));
-  await removeImages(before.referenceImages.filter((i) => !kept.has(i.path)));
+  const uploaded = [];
+  for (const a of input.attachments || []) uploaded.push(await uploadAttachment(id, a));
+  const task = normalizeTask({ ...input, id, attachments: uploaded, status: "request", pic: null });
+  const { title, category, division, requesterName, description, dueDate, attachments, referenceLinks } = task;
+  must(await db().from("tasks").insert(toRow({ id, title, category, division, requesterName, description, dueDate, attachments, referenceLinks })));
+  return task;
 }
 
 // Perubahan dari tim. patch: objek field baru, atau fungsi (task) => objek field baru.
+// Aturan pindah kolom (PIC dilepas, waktu mulai/selesai, sesi kerja) dijalankan trigger database.
 export async function updateTask(id, patch) {
   const current = await getTask(id);
   if (!current) throw new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
   const changes = typeof patch === "function" ? patch(current) : patch;
-  const row = must(await db().rpc("team_update_task", { p_pin: getPin(), p_id: id, p_patch: toRow(changes) }));
-  const updated = withChecklist(row, current);
+  must(await db().from("tasks").update(toRow(changes)).eq("id", id).select("id").single());
+  // Baca ulang terpisah: sesi waktu kerja dibuat trigger SETELAH update, jadi tidak ikut terbaca di permintaan yang sama.
+  const updated = fromRow(must(await db().from("tasks").select(SELECT_TASK).eq("id", id).single()));
   replaceInCache(updated);
-  if (changes.referenceImages) await removeUnusedImages(current, updated);
-  return updated;
-}
-
-// Requester mengedit request-nya sendiri. Gambar baru (punya dataUrl) di-upload dulu.
-export async function requesterUpdateTask(id, fields) {
-  const current = await getTask(id);
-  if (!current) throw new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
-  const changes = { ...fields };
-  if (fields.referenceImages) {
-    changes.referenceImages = [];
-    for (const img of fields.referenceImages) changes.referenceImages.push(img.dataUrl ? await uploadImage(id, img) : img);
+  if (changes.attachments) {
+    const kept = new Set(attachmentPaths(updated.attachments));
+    await removeFiles(attachmentPaths(current.attachments).filter((p) => !kept.has(p)));
   }
-  let row;
-  try {
-    row = must(await db().rpc("requester_update_task", { p_id: id, p_patch: toRow(changes) }));
-  } catch (e) {
-    // Simpan gagal: gambar yang baru saja di-upload tidak terpakai.
-    await removeImages(changes.referenceImages?.filter((i) => !current.referenceImages.some((c) => c.path === i.path)) || []);
-    throw e;
-  }
-  const updated = withChecklist(row, current);
-  replaceInCache(updated);
-  if (changes.referenceImages) await removeUnusedImages(current, updated);
   return updated;
-}
-
-export async function markSeen(id) {
-  const current = await getTask(id);
-  const row = must(await db().rpc("team_mark_seen", { p_pin: getPin(), p_id: id }));
-  const updated = withChecklist(row, current);
-  replaceInCache(updated);
-  return updated;
-}
-
-export async function deleteTask(id) {
-  const current = await getTask(id);
-  must(await db().rpc("team_delete_task", { p_pin: getPin(), p_id: id }));
-  cache = (cache || []).filter((t) => t.id !== id);
-  notify();
-  if (current) await removeImages(current.referenceImages);
 }
 
 export async function listHistory(taskId) {
-  const rows = must(await db().from("task_history").select("*").eq("task_id", taskId).order("created_at", { ascending: false }).limit(100));
-  return rows.map((r) => ({ id: String(r.id), createdAt: r.created_at, actor: r.actor, action: r.action, changes: r.changes || [] }));
+  const rows = must(await db().from("task_history").select("*").eq("task_id", taskId).order("created_at", { ascending: false }).limit(200));
+  return rows.map((r) => ({ id: String(r.id), createdAt: r.created_at, actorName: r.actor_name, actorEmail: r.actor_email, action: r.action, changes: r.changes || [] }));
 }
 
 // ─── Checklist: setiap aksi hanya mengubah satu item ────────────
@@ -211,21 +177,18 @@ function setChecklist(taskId, fn) {
 }
 
 export async function addChecklistItem(taskId, text, assignee) {
-  const row = must(await db().rpc("team_add_checklist_item", { p_pin: getPin(), p_task_id: taskId, p_text: text, p_assignee: assignee }));
+  const task = await getTask(taskId);
+  const position = task ? Math.max(-1, ...task.checklist.map((c) => c.position)) + 1 : 0;
+  const row = must(await db().from("task_checklist").insert({ task_id: taskId, text, assignee, position }).select().single());
   setChecklist(taskId, (list) => [...list, normalizeChecklistItem(row)]);
 }
 
 export async function updateChecklistItem(taskId, itemId, changes) {
-  const row = must(await db().rpc("team_update_checklist_item", { p_pin: getPin(), p_id: itemId, p_patch: changes }));
+  const row = must(await db().from("task_checklist").update(changes).eq("id", itemId).select().single());
   setChecklist(taskId, (list) => list.map((c) => (c.id === itemId ? normalizeChecklistItem(row) : c)));
 }
 
 export async function removeChecklistItem(taskId, itemId) {
-  must(await db().rpc("team_delete_checklist_item", { p_pin: getPin(), p_id: itemId }));
+  must(await db().from("task_checklist").delete().eq("id", itemId));
   setChecklist(taskId, (list) => list.filter((c) => c.id !== itemId));
-}
-
-// Dipakai layar PIN: cek PIN di server.
-export async function checkPin(pin) {
-  return !!must(await db().rpc("team_check_pin", { p_pin: pin }));
 }

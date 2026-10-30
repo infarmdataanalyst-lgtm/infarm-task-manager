@@ -2,12 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Link as LinkIcon, X } from "lucide-react";
-import { STATUS, STATUSES, STORAGE_MODE, designerColor } from "../config";
+import { ExternalLink, FileText, Link as LinkIcon, X } from "lucide-react";
+import { STATUS, STORAGE_MODE } from "../config";
 import { displayUrl } from "../lib/links";
 import { fmtBytes } from "../lib/images";
 
-export function AppHeader({ title, subtitle, to = "/", narrow = false, children }) {
+export function AppHeader({ title, subtitle, to = "/", narrow = false, center, children }) {
   return (
     <header className="app-header">
       <div className={`container ${narrow ? "container-narrow" : ""}`}>
@@ -15,53 +15,36 @@ export function AppHeader({ title, subtitle, to = "/", narrow = false, children 
           <span className="brand-logo">
             <img src="/logo-infarm.png" alt="Logo Infarm" />
           </span>
-          <span className="grow">
+          <span style={{ minWidth: 0 }}>
             <span className="brand-title">{title}</span>
             {subtitle && <span className="brand-sub">{subtitle}</span>}
           </span>
         </Link>
+        {center}
         {children && <div className="header-actions">{children}</div>}
       </div>
     </header>
   );
 }
 
-// Peringatan selama data masih di localStorage (sebelum Supabase).
+// Peringatan selama data masih di localStorage (sebelum Supabase diatur).
 export function LocalModeBanner() {
   if (STORAGE_MODE !== "local") return null;
   return (
     <p className="local-banner" role="note">
-      Mode uji coba: data masih tersimpan di browser ini saja, belum di server. Request dari perangkat lain belum
-      terlihat di sini sampai database dipasang.
+      Mode uji coba: data tersimpan di browser ini saja dan login memakai akun tiruan. Atur variabel Supabase di Vercel untuk
+      memakai database bersama dan login Google.
     </p>
   );
 }
 
 export const StatusBadge = ({ status }) => <span className={`badge badge-${status}`}>{STATUS[status]?.label}</span>;
 
-export const Avatar = ({ name, size = 24 }) => (
-  <span className="avatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.45), background: designerColor(name) }} aria-hidden="true">
+export const Avatar = ({ name, color, size = 24 }) => (
+  <span className="avatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.45), background: color || "#6b7280" }} aria-hidden="true">
     {name?.[0]}
   </span>
 );
-
-export function Stepper({ status, showLabels = true }) {
-  const step = STATUS[status]?.step || 1;
-  return (
-    <ol className="stepper" aria-label={`Tahap ${step} dari 4: ${STATUS[status]?.label}`}>
-      {STATUSES.map((s) => {
-        const n = STATUS[s].step;
-        const cls = [n <= step ? "done" : "", n === step ? "current" : ""].join(" ");
-        return (
-          <li key={s} className={cls} aria-current={n === step ? "step" : undefined}>
-            <span className="bar" />
-            {showLabels && <span>{STATUS[s].label}</span>}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 export function useToast() {
   const [toast, setToast] = useState(null);
@@ -92,7 +75,7 @@ export function useAction(showToast) {
       try {
         const result = await fn();
         if (successMessage) showToast(successMessage);
-        return result;
+        return result === undefined ? true : result;
       } catch (e) {
         showToast(e.message || "Terjadi kesalahan. Coba lagi.", "error");
         return undefined;
@@ -105,15 +88,30 @@ export function useAction(showToast) {
   return [run, busy];
 }
 
-export function Modal({ labelledBy, onClose, children }) {
+// Waktu sekarang yang diperbarui berkala (untuk angka waktu kerja yang berjalan).
+export function useNow(intervalMs = 60000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+export function Modal({ labelledBy, onClose, className = "", children }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
   }, [onClose]);
   return (
     <div className="modal-wrap" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
+      <div className={`modal ${className}`} role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
         {children}
       </div>
     </div>
@@ -128,7 +126,7 @@ export function Lightbox({ image, onClose }) {
   }, [onClose]);
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={image.name} onClick={onClose}>
-      <img src={image.dataUrl || image.url} alt={image.name} onClick={(e) => e.stopPropagation()} />
+      <img src={image.url} alt={image.name} onClick={(e) => e.stopPropagation()} />
       <p>{image.name}</p>
       <button type="button" className="btn btn-on-green" onClick={onClose}>
         <X size={16} /> Tutup
@@ -137,51 +135,60 @@ export function Lightbox({ image, onClose }) {
   );
 }
 
-// Daftar gambar & link referensi (hanya tampil).
-export function ReferenceList({ task }) {
+// Lampiran mini di kartu: maks 3 + "+n". Foto memakai thumbnail kecil supaya hemat kuota transfer.
+export function AttachmentStrip({ attachments }) {
+  if (!attachments.length) return null;
+  const shown = attachments.slice(0, 3);
+  const more = attachments.length - shown.length;
+  return (
+    <div className="file-strip" aria-label={`${attachments.length} lampiran`}>
+      {shown.map((a) => (
+        <span key={a.id} className={`file-mini ${a.type === "pdf" ? "pdf" : "image"}`} title={a.name}>
+          {a.type === "pdf" ? "PDF" : a.thumbUrl || a.url ? <img src={a.thumbUrl || a.url} alt="" loading="lazy" /> : "JPG"}
+        </span>
+      ))}
+      {more > 0 && <span className="file-mini more">+{more}</span>}
+    </div>
+  );
+}
+
+// Lampiran di detail: foto bisa diperbesar, PDF dibuka di tab baru.
+export function AttachmentList({ task }) {
   const [zoom, setZoom] = useState(null);
-  const { referenceImages: images, referenceLinks: links } = task;
-  if (!images.length && !links.length) {
-    return (
-      <p className="empty-box">
-        {task.referenceImagesDeletedAt ? "Gambar referensi sudah dihapus setelah task selesai." : "Tidak ada referensi."}
-      </p>
-    );
+  if (!task.attachments.length) {
+    return <p className="empty-box">{task.attachmentsDeletedAt ? "Lampiran sudah dihapus otomatis setelah task selesai." : "Tidak ada lampiran."}</p>;
   }
   return (
-    <div className="stack">
-      {images.length > 0 && (
-        <div className="ref-grid">
-          {images.map((img) => (
-            <button key={img.id} type="button" className="ref-thumb" onClick={() => setZoom(img)} aria-label={`Perbesar ${img.name}`}>
-              <img src={img.dataUrl || img.url} alt="" loading="lazy" />
-              <span className="caption" style={{ display: "block" }}>
-                {img.name}
-                {img.size ? ` · ${fmtBytes(img.size)}` : ""}
-              </span>
-            </button>
-          ))}
-        </div>
+    <div className="file-grid">
+      {task.attachments.map((a) =>
+        a.type === "pdf" ? (
+          <a key={a.id} className="file-tile pdf" href={a.url || undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!a.url}>
+            <span className="thumb"><FileText size={24} aria-hidden="true" /></span>
+            <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
+          </a>
+        ) : (
+          <button key={a.id} type="button" className="file-tile" onClick={() => setZoom(a)} aria-label={`Perbesar ${a.name}`}>
+            <span className="thumb">{a.thumbUrl || a.url ? <img src={a.thumbUrl || a.url} alt="" loading="lazy" /> : "JPG"}</span>
+            <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
+          </button>
+        )
       )}
-      {task.referenceImagesDeletedAt && !images.length && (
-        <p className="hint">Gambar referensi sudah dihapus setelah task selesai.</p>
-      )}
-      {links.map((l) => (
-        <a key={l.id} className="link-row" href={l.url} target="_blank" rel="noopener noreferrer">
-          <LinkIcon size={16} aria-hidden="true" />
-          <span className="url">{displayUrl(l.url)}</span>
-          <ExternalLink size={14} aria-hidden="true" style={{ marginRight: 8 }} />
-        </a>
-      ))}
       {zoom && <Lightbox image={zoom} onClose={() => setZoom(null)} />}
     </div>
   );
 }
 
-export const referenceSummary = (task) => {
-  const parts = [];
-  if (task.referenceImages.length) parts.push(`${task.referenceImages.length} gambar`);
-  else if (task.referenceImagesDeletedAt) parts.push("gambar sudah dihapus");
-  if (task.referenceLinks.length) parts.push(`${task.referenceLinks.length} link`);
-  return parts.join(" · ") || "tanpa referensi";
-};
+export function LinkList({ links, emptyText }) {
+  if (!links.length) return emptyText ? <p className="empty-box">{emptyText}</p> : null;
+  return (
+    <div className="stack">
+      {links.map((l) => (
+        <a key={l.id} className="link-row link-row-added" href={l.url} target="_blank" rel="noopener noreferrer">
+          <LinkIcon size={16} aria-hidden="true" />
+          <span className="url">{displayUrl(l.url)}</span>
+          <ExternalLink size={14} aria-hidden="true" />
+        </a>
+      ))}
+    </div>
+  );
+}

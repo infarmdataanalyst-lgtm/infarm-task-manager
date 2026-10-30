@@ -14,8 +14,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 - Mockup UI/UX (acuan tampilan): https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu
 
 > **Status:** spesifikasi di bawah adalah **v8** (disepakati dengan pemilik proyek, 30 Oktober 2026).
-> Kode di branch masih **v7** (PIN bersama, halaman status publik, kolom Todo, edit oleh requester).
-> Perbedaannya ada di bagian "Dari v7 ke v8". Saat mengubah kode, ikuti v8.
+> Dikerjakan bertahap, lihat "Tahapan v8". **Tahap 1 sudah di kode**; tahap 2–3 belum.
 
 ## Peran dan akses
 
@@ -89,7 +88,9 @@ Pakai React Router (path asli) + rewrite di `vercel.json`.
 - Ikon: `lucide-react` (sesuai design system Infarm)
 - Styling: `src/styles.css` dengan CSS variables dari design system Infarm (brand-primary `#00843b`, brand-surface `#f5ffef`, soil `#6b4e3d`, cream `#ede3d0`, Montserrat untuk heading, Geist untuk teks). Breakpoint HP: 720px.
 - Penyimpanan: **Supabase** (`@supabase/supabase-js`) bila `REACT_APP_SUPABASE_URL` + key diatur; kalau tidak, **mode uji coba** `localStorage`. Pemilihan otomatis di `src/data/taskStore.js`.
-- v8 menambah: **Supabase Auth (Google)**, geser kartu dengan pustaka drag and drop yang mendukung sentuhan dan keyboard (rencana: `@dnd-kit`), dan tugas terjadwal harian untuk menghapus lampiran (Supabase Edge Function terjadwal; file Storage harus dihapus lewat Storage API, bukan `delete from storage.objects`).
+- Login: **Supabase Auth (Google)**. Mode uji coba: akun tiruan (`LOCAL_MEMBERS` di `config.js`).
+- Geser kartu: **HTML5 drag and drop bawaan** (tanpa pustaka), hanya desktop dengan mouse. HP, layar sentuh, dan keyboard memakai tombol "Pindah ke…".
+- Tahap 3 (belum): tugas terjadwal harian untuk menghapus lampiran (Supabase Edge Function terjadwal; file Storage harus dihapus lewat Storage API, bukan `delete from storage.objects`).
 - `api/request.js`: Vercel Serverless Function lama untuk Google Apps Script. Tidak dipakai frontend dan tidak menyimpan data.
 
 ## Perintah
@@ -103,11 +104,12 @@ npm run build    # build produksi ke /build (CI=true: warning ESLint dianggap er
 Environment variable (atur di Vercel → Settings → Environment Variables):
 
 - `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_PUBLISHABLE_KEY` (atau `REACT_APP_SUPABASE_ANON_KEY`): koneksi Supabase. Keduanya aman di browser. Jangan pernah memakai secret/service_role key di frontend.
-- v7: PIN tim diatur lewat `supabase/set-pin.sql`; `REACT_APP_TEAM_PIN_SHA256` hanya untuk mode uji coba. Di v8 PIN diganti login Google (Client ID/Secret Google diatur di Supabase → Authentication → Providers, bukan di Vercel).
+- Login Google: Client ID/Secret diatur di Supabase → Authentication → Sign In / Providers → Google (bukan di Vercel). Google Cloud memakai mode **Testing** + Test users (Gmail Denny, Arum, SPV); tombol Publish butuh homepage + privacy policy URL.
+- Anggota tim: `supabase/anggota-awal.sql` (sekali), lalu tabel `team_members`.
 
-Langkah menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md` (perlu ditambah langkah Google OAuth di v8).
+Langkah menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md`.
 
-Belum ada test otomatis. Uji manual minimal v8: kirim request dengan 2 foto + 1 PDF + link; banner dan badge "Baru" muncul di board; Ambil lewat tombol Arum/Denny; checklist dibagi dua orang; geser ke Delay (waktu berhenti) lalu kembali; Finish (wajib link); revisi dari Finish; cek riwayat dan audit; cek tampilan HP (lebar 390px).
+Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 foto + 1 PDF + link; banner dan badge "Baru" muncul di board; Ambil lewat tombol Arum/Denny; checklist dibagi dua orang; geser ke Delay (waktu berhenti) lalu kembali; Finish (wajib link); revisi dari Finish; cek riwayat dan audit; cek tampilan HP (lebar 390px).
 
 ## Model data (v8)
 
@@ -137,7 +139,12 @@ Tabel Supabase v8:
 - `team_members`: `email` (Gmail), `name`, `role: "designer" | "admin"`, `active`, `color`.
 - Storage bucket `references`: `<id task>/<file>` untuk foto, thumbnail, dan PDF (maks 5 MB, JPG/PNG/WEBP/PDF).
 
-Migrasi v7 → v8 (di `schema.sql`, idempotent, wajib diuji dengan data v7): `todo` → `on_progress` (sesi kerja dimulai saat migrasi), `reference_images` → `attachments`, kolom edit requester (`requester_updated_at`, `pic_seen_at`) dan fungsi PIN/requester dihapus, riwayat lama tetap (`actor` "tim" → `actor_name` "tim (sebelum login)").
+Tidak ada migrasi v7 → v8: skema v7 tidak pernah dijalankan di database produksi (proyek Supabase dibuat baru untuk v8). `schema.sql` v8 ditulis untuk database baru dan aman dijalankan ulang.
+
+Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition` + `localStore.js`):
+- `tasks_before_update`: pindah ke Request → PIC dilepas; masuk On Progress pertama kali → `started_at`; masuk Finish → `finished_at`, keluar dari Finish → dikosongkan; selain Delay → `delay_reason` dikosongkan; arsip → `deleted_by`; task terarsip hanya bisa diubah admin.
+- `tasks_after_write`: buka/tutup `work_sessions`, tulis `task_history` (`dibuat` oleh requester, lalu `diambil`, `ditunda`, `dilanjutkan`, `selesai`, `revisi`, `dilepas`, `dipindah`, `diubah`, `dihapus`, `dipulihkan`, `lampiran_dihapus`).
+- `checklist_after_write`: riwayat `checklist` (lewati bila task-nya dihapus permanen).
 
 ## Aturan tata letak UI (v8, acuan: mockup)
 
@@ -168,9 +175,15 @@ Migrasi v7 → v8 (di `schema.sql`, idempotent, wajib diuji dengan data v7): `to
 - Link diketik tanpa `https://` tetap diterima: pakai `normalizeUrl`, dan input link memakai `type="text" inputMode="url"`.
 - Waktu kerja: satu fungsi perhitungan jam kerja di SQL dan padanannya di JS (untuk angka berjalan di layar) harus selalu sama.
 
-## Dari v7 ke v8 (rencana perubahan kode)
+## Tahapan v8
 
-| Bagian | v7 (kode sekarang) | v8 |
+- **Tahap 1 (sudah):** skema v8 + RLS + trigger, login Google + `team_members`, form `/` foto + PDF maks 5 + thumbnail, board 4 kolom (urut deadline), geser kartu + "Pindah ke…", tombol Arum/Denny di kartu Request, pop-up detail (Edit/Hapus/Tutup), checklist per orang, waktu kerja jam kerja, riwayat di detail, hapus = arsip, pencarian judul, filter Tugas saya/PIC/deadline, menu bawah HP.
+- **Tahap 2:** analitik per orang + pembanding minggu/bulan lalu, halaman Audit (admin, termasuk pulihkan task terhapus), halaman Anggota (admin), edit lampiran oleh tim.
+- **Tahap 3:** banner + kartu "Baru" per akun (`task_reads`), penghapusan lampiran otomatis 7 hari setelah Finish, (opsional) halaman `/privasi` untuk Publish di Google.
+
+## Dari v7 ke v8 (ringkasan perubahan)
+
+| Bagian | v7 (sebelumnya) | v8 |
 |---|---|---|
 | Akses tim | PIN bersama (`team_*` RPC + `app_settings`) | Login Google + `team_members`, RLS `authenticated` |
 | Requester | Halaman status publik `/` + edit `/request/:id/edit` | Hanya form `/`; tidak bisa melihat/mengedit |
@@ -184,60 +197,66 @@ Migrasi v7 → v8 (di `schema.sql`, idempotent, wajib diuji dengan data v7): `to
 | Waktu kerja | Tidak ada | Jam kerja Senin–Jumat 08–17, berhenti di Delay |
 | Analitik | Per desainer, periode | + per orang dibanding minggu/bulan lalu, rata-rata waktu kerja |
 
-File v7 yang akan dihapus/diganti: `src/pages/StatusPage.js`, `src/pages/EditRequestPage.js`, `src/lib/pin.js`, `supabase/set-pin.sql`, layar PIN di `team/TeamLayout.js`, `team/TaskDetail.js` (jadi pop-up).
+File v7 yang sudah dihapus: `src/pages/StatusPage.js`, `src/pages/EditRequestPage.js`, `src/lib/pin.js`, `supabase/set-pin.sql`, `team/FinishDialog.js` (digabung ke `MoveDialog.js`).
 
-## Struktur file (kode saat ini, v7)
+## Struktur file
 
 ```
 public/index.html          title, viewport, font Google (Geist, Montserrat)
 public/logo-infarm.png     logo + favicon
 vercel.json                rewrite semua path (kecuali /api) ke index.html
 src/index.js               entry: BrowserRouter + styles.css
-src/App.js                 routing + redirect link lama "/#/request"
-src/config.js              DESIGNERS (nama + warna), CATEGORIES, DIVISIONS, STATUS, PIN hash, STORAGE_MODE
+src/App.js                 routing: "/" form, "/request" → "/", "/tim/*" (+ redirect link lama "/#/request")
+src/config.js              CATEGORIES, DIVISIONS, STATUS(ES), batas lampiran, koneksi Supabase, LOCAL_MEMBERS (mode uji coba)
 src/styles.css             semua style (token Infarm, komponen, responsive)
-supabase/schema.sql        skema database v7, RLS, fungsi RPC tim (cek PIN) & requester, bucket Storage, Realtime.
-                           Idempotent; juga meng-upgrade database v6 (checklist jsonb → tabel task_checklist).
-supabase/set-pin.sql       atur/ganti PIN tim (disimpan sebagai hash)
-docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Vercel
+supabase/schema.sql        skema v8: tabel, RLS, trigger (riwayat, sesi kerja, aturan kolom), work_minutes(), Storage, Realtime
+supabase/anggota-awal.sql  anggota awal (Gmail Denny, Arum, SPV) — diisi pemilik proyek, dijalankan sekali
+docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Google + Vercel
 src/data/
+  supabaseClient.js        satu klien Supabase (sesi login disimpan & diperbarui otomatis)
+  auth.js                  login Google / akun tiruan, cek anggota (my_membership), daftar anggota, useAuth()
   taskStore.js             pintu masuk data: memilih supabaseStore atau localStore sesuai STORAGE_MODE
-  supabaseStore.js         CRUD via Supabase, upload/hapus gambar, Realtime (tasks + task_checklist)
-  localStore.js            CRUD via localStorage (mode uji coba) + riwayat lokal + migrasi v5→v6
-  taskModel.js             normalizeTask, fromRow/toRow, taskChanges/historyAction, isUpdatedByRequester, helpers, involves
-  taskActions.js           aksi alur kerja (submitRequest, editRequest, assignTask, startTask, finishTask, reviseTask, markSeen, checklist, ...)
+  supabaseStore.js         Supabase: insert request (anon), baca/ubah (anggota), lampiran Storage, checklist, riwayat, Realtime
+  localStore.js            localStorage (mode uji coba): meniru aturan trigger, sesi kerja, riwayat
+  taskModel.js             normalizeTask, fromRow/toRow, applyTransition, taskChanges/historyAction (padanan SQL), helpers, involves
+  taskActions.js           aksi alur kerja (submitRequest, takeTask, moveTask, changePic, editTask, deleteTask, checklist, ...)
   useTasks.js              hook React: daftar task yang ikut berubah otomatis
 src/lib/
-  dates.js                 tanggal, overdue, deadline dekat, tepat waktu, rentang periode analitik
-  images.js                kompres gambar (maks 1600px, JPEG 0.8), fmtBytes, newId
+  worktime.js              waktu kerja jam kerja Sen–Jum 08–17 WIB (padanan work_minutes() di SQL), fmtDuration
+  dates.js                 tanggal, overdue, tepat waktu, rentang periode analitik
+  images.js                lampiran: kompres foto + thumbnail, cek PDF ≤5 MB, fmtBytes, newId
   links.js                 normalizeUrl, displayUrl
   csv.js                   export CSV (RFC 4180 + BOM untuk Excel)
-  changes.js               teks riwayat perubahan
-  pin.js                   PIN tim (dihapus di v8)
+  changes.js               teks riwayat (aksi + perubahan field)
 src/components/
-  ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Stepper, Modal, Lightbox, ReferenceList, useToast, useAction
-  ReferenceEditor.js       input gambar + link referensi
+  ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Modal, Lightbox, AttachmentStrip/List, LinkList, useToast, useAction, useNow
+  ReferenceEditor.js       input lampiran (foto + PDF, maks 5) + link referensi di form
 src/pages/
-  StatusPage.js            "/" status semua request (dihapus di v8)
-  RequestPage.js           "/request" form + konfirmasi
-  EditRequestPage.js       "/request/:id/edit" edit oleh requester (dihapus di v8)
-  team/TeamLayout.js       "/tim/*" layar PIN, header, tab Kanban/Analitik
-  team/BoardPage.js        Kanban, filter, statistik, beban kerja
+  RequestPage.js           "/" form request + "Request sudah masuk"
+  team/TeamLayout.js       "/tim/*" login Google, header (cari, salin link, export, akun), tab / menu bawah HP
+  team/BoardPage.js        Kanban 4 kolom, chip angka, filter, geser kartu
   team/TaskCard.js         kartu Kanban
-  team/TaskDetail.js       panel detail (jadi pop-up di v8)
-  team/FinishDialog.js     dialog Finish: wajib link hasil
-  team/AnalyticsPage.js    analitik
+  team/MoveDialog.js       "Pindah ke…": PIC (dari Request), alasan Delay, link hasil Finish
+  team/TaskDetail.js       pop-up detail: edit, hapus (arsip), checklist per orang, link hasil, riwayat
+  team/AnalyticsPage.js    "/tim/analitik" (versi sementara; tahap 2 ditulis ulang)
 ```
 
 ## Masalah yang diketahui
 
-- **Mode uji coba** (tanpa env Supabase): data hanya di browser; banner "Mode uji coba" tampil. Di v8, login Google hanya berjalan di mode Supabase; mode uji coba memakai pilihan akun tiruan.
+- **Mode uji coba** (tanpa env Supabase): data hanya di browser; banner "Mode uji coba" tampil; login memakai akun tiruan (tanpa keamanan). PDF > 1 MB tidak disimpan isinya.
 - **Daftar task dibatasi 500 terbaru** (`LIST_LIMIT` di `supabaseStore.js`). Tambahkan paginasi bila task lebih banyak.
 - **Realtime mengambil ulang seluruh daftar** setiap ada perubahan (jeda 300 ms). Cukup untuk volume tim.
 - **File yatim** bisa tersisa jika upload berhasil tapi simpan task gagal. Penghapus lampiran terjadwal v8 sebaiknya juga membersihkan file tanpa task.
 - **Supabase Free dijeda** setelah 7 hari tanpa aktivitas; tugas terjadwal ikut berhenti selama dijeda.
+- **Bucket `references` publik**: file bisa dibuka siapa pun yang tahu URL-nya (nama file UUID, tidak bisa ditebak; tidak bisa di-list oleh requester).
+- **Upload lampiran oleh requester** belum diuji di Supabase sungguhan (hanya di tiruan); cek pertama kali di preview.
+- **Libur nasional** belum dikecualikan dari waktu kerja.
 
 ## Integrasi Supabase
 
-- v7 (kode sekarang): requester `SELECT` semua task + `INSERT` request + `requester_update_task`; tim lewat RPC `team_*` ber-PIN; Storage hanya boleh menghapus gambar task Finish/terhapus/tidak dipakai. Uji SQL lokal: Postgres 16 + stub role `anon`/`authenticated`, schema `storage`, publication `supabase_realtime`; uji upgrade dengan membandingkan `pg_dump -s` database baru vs hasil upgrade.
-- v8: requester hanya `INSERT` (tanpa membaca balik; konfirmasi memakai isian form), anggota tim `SELECT/UPDATE` lewat RLS berbasis `auth.email()` ∈ `team_members`, audit lewat trigger (`security definer`), admin-only untuk `team_members`, pemulihan arsip, dan halaman audit.
+- Requester (`anon`): hanya `INSERT` request bersih (tanpa membaca balik; konfirmasi memakai isian form) dan upload ke Storage `references`.
+- Anggota aktif (`authenticated`, email ∈ `team_members`): `SELECT/UPDATE` task, kelola `task_checklist`, baca `work_sessions`, `task_history`, `team_members`. Tidak ada `DELETE` task (hapus = `deleted_at`).
+- Admin: + kelola `team_members`, ubah/pulihkan task terarsip.
+- `task_history` dan `work_sessions` hanya ditulis trigger (`security definer`); tidak ada izin tulis untuk siapa pun.
+- Setelah update, aplikasi membaca ulang task (sesi kerja dibuat trigger setelah update, tidak ikut terbaca di permintaan yang sama).
+- Uji lokal: Postgres 16 + stub role `anon`/`authenticated`, `auth.jwt()` dari `request.jwt.claims`, schema `storage`, publication `supabase_realtime`. Uji end-to-end memakai server tiruan PostgREST yang meneruskan permintaan ke Postgres tersebut dengan peran dari token (lihat riwayat sesi; skripnya tidak disimpan di repo).

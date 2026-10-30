@@ -15,6 +15,8 @@ export function normalizeChecklistItem(c, i = 0) {
   };
 }
 
+const normalizeSession = (w) => ({ startedAt: w.startedAt ?? w.started_at, endedAt: w.endedAt ?? w.ended_at ?? null });
+
 export function normalizeTask(t) {
   return {
     id: String(t.id ?? newId()),
@@ -26,23 +28,24 @@ export function normalizeTask(t) {
     dueDate: t.dueDate || "",
     status: t.status || "request",
     pic: t.pic || null,
-    referenceImages: arr(t.referenceImages),
+    delayReason: t.delayReason || null,
+    attachments: arr(t.attachments),
     referenceLinks: arr(t.referenceLinks),
     resultLinks: arr(t.resultLinks),
     checklist: arr(t.checklist).map(normalizeChecklistItem).sort((a, b) => a.position - b.position),
+    workSessions: arr(t.workSessions).map(normalizeSession).sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt)),
     createdAt: t.createdAt || new Date().toISOString(),
-    assignedAt: t.assignedAt || null,
     startedAt: t.startedAt || null,
     finishedAt: t.finishedAt || null,
-    referenceImagesDeletedAt: t.referenceImagesDeletedAt || null,
-    requesterUpdatedAt: t.requesterUpdatedAt || null,
-    picSeenAt: t.picSeenAt || null,
+    attachmentsDeletedAt: t.attachmentsDeletedAt || null,
+    deletedAt: t.deletedAt || null,
+    deletedBy: t.deletedBy || null,
     updatedAt: t.updatedAt || t.createdAt || new Date().toISOString(),
   };
 }
 
 // Pasangan nama field aplikasi ↔ kolom tabel public.tasks (supabase/schema.sql).
-// Checklist ada di tabel sendiri (task_checklist), jadi tidak ada di sini.
+// checklist (task_checklist) dan workSessions (work_sessions) ada di tabel sendiri.
 export const COLUMNS = {
   id: "id",
   title: "title",
@@ -53,24 +56,25 @@ export const COLUMNS = {
   dueDate: "due_date",
   status: "status",
   pic: "pic",
-  referenceImages: "reference_images",
+  delayReason: "delay_reason",
+  attachments: "attachments",
   referenceLinks: "reference_links",
   resultLinks: "result_links",
   createdAt: "created_at",
-  assignedAt: "assigned_at",
   startedAt: "started_at",
   finishedAt: "finished_at",
-  referenceImagesDeletedAt: "reference_images_deleted_at",
-  requesterUpdatedAt: "requester_updated_at",
-  picSeenAt: "pic_seen_at",
+  attachmentsDeletedAt: "attachments_deleted_at",
+  deletedAt: "deleted_at",
+  deletedBy: "deleted_by",
   updatedAt: "updated_at",
 };
 
-// row.checklist berisi baris task_checklist (di-embed lewat select "checklist:task_checklist(*)").
+// row.checklist & row.workSessions di-embed lewat select (lihat SELECT_TASK di supabaseStore.js).
 export function fromRow(row) {
   const t = {};
   for (const [field, column] of Object.entries(COLUMNS)) t[field] = row[column];
   t.checklist = arr(row.checklist);
+  t.workSessions = arr(row.workSessions);
   return normalizeTask(t);
 }
 
@@ -84,12 +88,26 @@ export function toRow(fields) {
   return row;
 }
 
-// Field yang boleh diubah requester lewat halaman edit.
-export const REQUESTER_FIELDS = ["title", "category", "division", "requesterName", "description", "dueDate", "referenceImages", "referenceLinks"];
+// ─── Aturan pindah kolom (padanan trigger tasks_before_update di SQL) ──
+// Dipakai mode uji coba; di mode Supabase database yang menjalankannya.
+export function applyTransition(current, changes, now = new Date().toISOString()) {
+  const next = { ...current, ...changes };
+  if (next.status !== current.status) {
+    if (next.status === "request") next.pic = null;
+    if (next.status === "on_progress" && !next.startedAt) next.startedAt = now;
+    if (next.status === "finish") next.finishedAt = now;
+    else if (current.status === "finish") next.finishedAt = null;
+    // Sesi waktu kerja: buka saat masuk On Progress, tutup saat keluar.
+    if (next.status === "on_progress") next.workSessions = [...current.workSessions, { startedAt: now, endedAt: null }];
+    else if (current.status === "on_progress") next.workSessions = current.workSessions.map((w) => (w.endedAt ? w : { ...w, endedAt: now }));
+  }
+  if (next.status !== "delay") next.delayReason = null;
+  if (next.status !== "request" && !next.pic) throw new Error("Pilih PIC dulu sebelum memindah task dari Request.");
+  if (next.status === "finish" && !arr(next.resultLinks).length) throw new Error("Isi minimal satu link hasil desain.");
+  return next;
+}
 
-// ─── Riwayat perubahan ──────────────────────────────────────────
-// Bentuknya sama dengan task_changes() di supabase/schema.sql: [{field, before, after}],
-// field memakai nama kolom database; gambar dicatat sebagai daftar nama, link sebagai daftar URL.
+// ─── Riwayat (padanan task_changes / task_action di SQL) ────────
 
 const HISTORY_FIELDS = [
   ["title", (t) => t.title],
@@ -100,7 +118,8 @@ const HISTORY_FIELDS = [
   ["due_date", (t) => t.dueDate || null],
   ["status", (t) => t.status],
   ["pic", (t) => t.pic || null],
-  ["reference_images", (t) => arr(t.referenceImages).map((i) => i.name)],
+  ["delay_reason", (t) => t.delayReason || null],
+  ["attachments", (t) => arr(t.attachments).map((a) => a.name)],
   ["reference_links", (t) => arr(t.referenceLinks).map((l) => l.url)],
   ["result_links", (t) => arr(t.resultLinks).map((l) => l.url)],
 ];
@@ -115,22 +134,18 @@ export function taskChanges(before, after) {
   return changes;
 }
 
-// Sama dengan task_action() di supabase/schema.sql.
 export function historyAction(oldStatus, newStatus) {
   if (oldStatus === newStatus) return "diubah";
-  if (oldStatus === "request" && newStatus === "todo") return "diambil";
-  if (oldStatus === "finish" && newStatus === "on_progress") return "revisi";
-  if (newStatus === "on_progress") return "dimulai";
+  if (oldStatus === "request" && newStatus === "on_progress") return "diambil";
+  if (oldStatus === "finish") return "revisi";
+  if (newStatus === "delay") return "ditunda";
+  if (oldStatus === "delay" && newStatus === "on_progress") return "dilanjutkan";
   if (newStatus === "finish") return "selesai";
   if (newStatus === "request") return "dilepas";
-  return "dikembalikan";
+  return "dipindah";
 }
 
 // ─── Turunan untuk tampilan ─────────────────────────────────────
-
-// Requester mengubah request setelah tim terakhir membuka detailnya.
-export const isUpdatedByRequester = (t) =>
-  t.status !== "finish" && !!t.requesterUpdatedAt && (!t.picSeenAt || new Date(t.picSeenAt) < new Date(t.requesterUpdatedAt));
 
 // Desainer selain PIC yang punya item checklist di task ini.
 export const helpers = (t) => [...new Set(t.checklist.map((c) => c.assignee).filter((a) => a && a !== t.pic))];
