@@ -151,7 +151,7 @@ const TABS = [
 ];
 
 function TeamApp({ auth }) {
-  const { tasks: allTasks } = useTasks();
+  const { tasks: allTasks, error: loadError, retry } = useTasks();
   const { isNew, markRead } = useReads(auth.email);
   const navigate = useNavigate();
   const [bannerSeenAt, setBannerSeenAt] = useState(() => readBannerSeen(auth.email));
@@ -249,6 +249,12 @@ function TeamApp({ auth }) {
       <main className="container page">
         <LocalModeBanner />
         <NewRequestBanner items={freshRequests} onSee={seeNewRequests} />
+        {loadError && (
+          <div className="load-error" role="alert">
+            <span><strong>Daftar task gagal dimuat.</strong> {loadError}</span>
+            <button type="button" className="btn btn-outline btn-sm" onClick={retry}>Coba lagi</button>
+          </div>
+        )}
         <nav className="tabs hide-mobile" aria-label="Tampilan">
           {TABS.filter((t) => !t.admin || isAdmin).map((t) => (
             <Link key={t.key} to={t.to} className={`tab ${section === t.key ? "active" : ""}`} aria-current={section === t.key ? "page" : undefined}>{t.label}</Link>

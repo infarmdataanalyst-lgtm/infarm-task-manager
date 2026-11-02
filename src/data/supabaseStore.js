@@ -22,6 +22,10 @@ function friendlyError(error) {
   if (msg.includes("tasks_link_hasil_wajib")) return new Error("Isi minimal satu link hasil desain.");
   if (msg.includes("tasks_lampiran_maks")) return new Error("Maksimal 5 lampiran per request.");
   if (msg.includes("task_terhapus")) return new Error("Task ini sudah dihapus. Hanya admin yang bisa memulihkannya.");
+  // Kolom/tabel/fungsi belum ada = schema.sql versi terbaru belum dijalankan di Supabase.
+  if (msg.includes("42703") || msg.includes("42P01") || msg.includes("PGRST200") || msg.includes("PGRST202") || /does not exist|Could not find/.test(msg)) {
+    return new Error("Struktur database belum diperbarui. Admin perlu menjalankan ulang supabase/schema.sql di Supabase (SQL Editor → Run).");
+  }
   if (msg.includes("PGRST116")) return new Error("Task tidak ditemukan atau kamu tidak punya akses.");
   if (msg.includes("JWT") || msg.includes("PGRST301")) return new Error("Sesi login berakhir. Muat ulang halaman lalu masuk lagi.");
   if (msg.includes("row-level security") || msg.includes("permission denied") || msg.includes("42501")) {

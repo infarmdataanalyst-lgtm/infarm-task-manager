@@ -268,6 +268,7 @@ src/pages/
 - **Bucket `references` publik**: file bisa dibuka siapa pun yang tahu URL-nya (nama file UUID, tidak bisa ditebak; tidak bisa di-list oleh requester).
 - **Upload lampiran oleh requester** belum diuji di Supabase sungguhan (hanya di tiruan); cek pertama kali di preview.
 - **Libur nasional** belum dikecualikan dari waktu kerja.
+- **Kode lebih baru dari database:** bila `schema.sql` terbaru belum dijalankan (mis. kolom `work_sessions.status` dari 2 Nov 2026), daftar task gagal dimuat. Board menampilkan banner merah "Daftar task gagal dimuat… jalankan ulang supabase/schema.sql" + Coba lagi (bukan board kosong). Setiap PR yang mengubah `schema.sql`: jalankan ulang di Supabase sebelum merge.
 - **Halaman Audit menampilkan 500 perubahan terbaru** (filter berjalan di browser). Tambahkan paginasi/filter di server bila riwayat sudah sangat banyak.
 - **Menghapus anggota tidak mengubah task-nya:** `tasks.pic` dan `assignee` checklist menyimpan nama, jadi task milik anggota yang dihapus tetap ada dengan nama lama (avatar abu-abu). Ganti PIC lewat detail task. Lebih aman menonaktifkan daripada menghapus.
 - **Data uji coba sebelum 2 Nov 2026**: waktu di Delay dari sebelum perubahan ini tidak tercatat (dulu hanya On Progress yang dicatat).
