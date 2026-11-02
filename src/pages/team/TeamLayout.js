@@ -3,8 +3,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, ChevronDown, Copy, Download, Inbox, LayoutDashboard, LogOut, Search, UserRound } from "lucide-react";
-import { LOCAL_MEMBERS, STORAGE_MODE } from "../../config";
+import { BarChart3, ChevronDown, Copy, Download, Inbox, LayoutDashboard, LogOut, Search, ShieldCheck, UserRound } from "lucide-react";
+import { STORAGE_MODE } from "../../config";
+import { readLocalMembers } from "../../data/members";
 import { signInLocal, signInWithGoogle, signOut, useAuth } from "../../data/auth";
 import { useTasks } from "../../data/useTasks";
 import { useReads } from "../../data/useReads";
@@ -66,7 +67,7 @@ function LoginScreen({ auth }) {
         ) : (
           <div className="stack" style={{ width: "100%" }}>
             <LocalModeBanner />
-            {LOCAL_MEMBERS.map((m) => (
+            {readLocalMembers().filter((m) => m.active).map((m) => (
               <button key={m.email} type="button" className="google-btn" onClick={() => signInLocal(m.email)}>
                 <Avatar name={m.name} color={m.color} size={24} /> Masuk sebagai {m.name}{m.role === "admin" ? " (admin)" : ""}
               </button>
@@ -142,8 +143,15 @@ function NewRequestBanner({ items, onSee }) {
   );
 }
 
+const TABS = [
+  { key: "kanban", to: "/tim", label: "Kanban" },
+  { key: "analitik", to: "/tim/analitik", label: "Analitik" },
+  { key: "audit", to: "/tim/audit", label: "Audit", admin: true },
+  { key: "anggota", to: "/tim/anggota", label: "Anggota", admin: true },
+];
+
 function TeamApp({ auth }) {
-  const { tasks: allTasks } = useTasks();
+  const { tasks: allTasks, error: loadError, retry } = useTasks();
   const { isNew, markRead } = useReads(auth.email);
   const navigate = useNavigate();
   const [bannerSeenAt, setBannerSeenAt] = useState(() => readBannerSeen(auth.email));
@@ -154,7 +162,10 @@ function TeamApp({ auth }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const menuRef = useRef(null);
-  const onAnalytics = pathname.startsWith("/tim/analitik");
+  // Bagian aktif: kanban (termasuk /tim/task/:id), analitik, audit, anggota.
+  const section = ["analitik", "audit", "anggota"].find((s) => pathname.startsWith(`/tim/${s}`)) || "kanban";
+  const isAdmin = auth.member.role === "admin";
+  const onAdminPage = section === "audit" || section === "anggota";
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -238,15 +249,33 @@ function TeamApp({ auth }) {
       <main className="container page">
         <LocalModeBanner />
         <NewRequestBanner items={freshRequests} onSee={seeNewRequests} />
+        {loadError && (
+          <div className="load-error" role="alert">
+            <span><strong>Daftar task gagal dimuat.</strong> {loadError}</span>
+            <button type="button" className="btn btn-outline btn-sm" onClick={retry}>Coba lagi</button>
+          </div>
+        )}
         <nav className="tabs hide-mobile" aria-label="Tampilan">
-          <Link to="/tim" className={`tab ${onAnalytics ? "" : "active"}`} aria-current={onAnalytics ? undefined : "page"}>Kanban</Link>
-          <Link to="/tim/analitik" className={`tab ${onAnalytics ? "active" : ""}`} aria-current={onAnalytics ? "page" : undefined}>Analitik</Link>
+          {TABS.filter((t) => !t.admin || isAdmin).map((t) => (
+            <Link key={t.key} to={t.to} className={`tab ${section === t.key ? "active" : ""}`} aria-current={section === t.key ? "page" : undefined}>{t.label}</Link>
+          ))}
         </nav>
-        <Outlet context={{ tasks, showToast, query, member: auth.member, members, designers, colorOf, isNew, markRead }} />
+        {onAdminPage && isAdmin && (
+          <nav className="segmented show-mobile" aria-label="Halaman admin" style={{ alignSelf: "flex-start" }}>
+            <Link to="/tim/audit" className={section === "audit" ? "on" : ""} aria-current={section === "audit" ? "page" : undefined}>Audit</Link>
+            <Link to="/tim/anggota" className={section === "anggota" ? "on" : ""} aria-current={section === "anggota" ? "page" : undefined}>Anggota</Link>
+          </nav>
+        )}
+        {onAdminPage && !isAdmin ? (
+          <p className="empty-box">Halaman ini khusus admin.</p>
+        ) : (
+          <Outlet context={{ tasks, allTasks, showToast, query, member: auth.member, members, allMembers: auth.members || [], designers, colorOf, isNew, markRead }} />
+        )}
       </main>
-      <nav className="bottom-nav" aria-label="Navigasi utama">
-        <Link to="/tim" className={onAnalytics ? "" : "active"} aria-current={onAnalytics ? undefined : "page"}><LayoutDashboard size={22} aria-hidden="true" />Kanban</Link>
-        <Link to="/tim/analitik" className={onAnalytics ? "active" : ""} aria-current={onAnalytics ? "page" : undefined}><BarChart3 size={22} aria-hidden="true" />Analitik</Link>
+      <nav className={`bottom-nav ${isAdmin ? "four" : ""}`} aria-label="Navigasi utama">
+        <Link to="/tim" className={section === "kanban" ? "active" : ""} aria-current={section === "kanban" ? "page" : undefined}><LayoutDashboard size={22} aria-hidden="true" />Kanban</Link>
+        <Link to="/tim/analitik" className={section === "analitik" ? "active" : ""} aria-current={section === "analitik" ? "page" : undefined}><BarChart3 size={22} aria-hidden="true" />Analitik</Link>
+        {isAdmin && <Link to="/tim/audit" className={onAdminPage ? "active" : ""} aria-current={onAdminPage ? "page" : undefined}><ShieldCheck size={22} aria-hidden="true" />Admin</Link>}
         <button type="button" onClick={() => setSheetOpen(true)}><UserRound size={22} aria-hidden="true" />Akun</button>
       </nav>
       {sheetOpen && <AccountMenu auth={auth} mobile onCopy={copyRequestLink} onExport={exportCsv} onClose={() => setSheetOpen(false)} />}

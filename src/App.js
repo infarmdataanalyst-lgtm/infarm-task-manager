@@ -6,6 +6,8 @@ import RequestPage from "./pages/RequestPage";
 import TeamLayout from "./pages/team/TeamLayout";
 import BoardPage from "./pages/team/BoardPage";
 import AnalyticsPage from "./pages/team/AnalyticsPage";
+import AuditPage from "./pages/team/AuditPage";
+import MembersPage from "./pages/team/MembersPage";
 
 // Link lama berbasis hash ("/#/request") sudah tersebar; alihkan ke path baru.
 function LegacyHashRedirect() {
@@ -29,6 +31,8 @@ export default function App() {
           <Route index element={<BoardPage />} />
           <Route path="task/:id" element={<BoardPage />} />
           <Route path="analitik" element={<AnalyticsPage />} />
+          <Route path="audit" element={<AuditPage />} />
+          <Route path="anggota" element={<MembersPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
