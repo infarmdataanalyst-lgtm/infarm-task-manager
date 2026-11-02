@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ArrowLeftRight, Check, Paperclip, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
 import { CATEGORIES, DIVISIONS, MAX_ATTACHMENTS, STATUS } from "../../config";
 import * as actions from "../../data/taskActions";
-import { helpers } from "../../data/taskModel";
+import { canLeaveRequest, helpers, notPicMessage } from "../../data/taskModel";
 import { describeEntry } from "../../lib/changes";
 import { daysLate, fmtDateTime, fmtDay, isOverdue } from "../../lib/dates";
 import { newId, prepareAttachment } from "../../lib/images";
@@ -217,7 +217,7 @@ function History({ task }) {
   );
 }
 
-export default function TaskDetail({ task, now, designers, colorOf, run, busy, onClose, onTake, onMove }) {
+export default function TaskDetail({ task, now, member, designers, colorOf, run, busy, onClose, onAssign, onStart, onMove }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingResults, setEditingResults] = useState(false);
@@ -261,16 +261,13 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
                 <div>
                   <dt>PIC</dt>
                   <dd>
-                    {task.pic ? (
-                      <>
-                        <Avatar name={task.pic} color={colorOf(task.pic)} size={22} />
-                        <select className="select" style={{ minHeight: 28, padding: "0 4px", fontWeight: 700, border: 0, background: "transparent", width: "auto" }} aria-label="Ganti PIC" value={task.pic}
-                          onChange={(e) => run(() => actions.changePic(task.id, e.target.value), `PIC diganti ke ${e.target.value}.`)}>
-                          {designers.map((d) => <option key={d.email} value={d.name}>{d.name}</option>)}
-                          {!designers.some((d) => d.name === task.pic) && <option value={task.pic}>{task.pic}</option>}
-                        </select>
-                      </>
-                    ) : "Belum ada"}
+                    {task.pic && <Avatar name={task.pic} color={colorOf(task.pic)} size={22} />}
+                    <select className="select" style={{ minHeight: 28, padding: "0 4px", fontWeight: 700, border: 0, background: "transparent", width: "auto" }} aria-label={task.pic ? "Ganti PIC" : "Tentukan PIC"} value={task.pic || ""}
+                      onChange={(e) => e.target.value && (task.status === "request" ? onAssign(task, e.target.value) : run(() => actions.changePic(task.id, e.target.value), `PIC diganti ke ${e.target.value}.`))}>
+                      {!task.pic && <option value="">Belum ada, pilih…</option>}
+                      {designers.map((d) => <option key={d.email} value={d.name}>{d.name}</option>)}
+                      {task.pic && !designers.some((d) => d.name === task.pic) && <option value={task.pic}>{task.pic}</option>}
+                    </select>
                   </dd>
                 </div>
                 <div>
@@ -278,7 +275,7 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
                   <dd>{others.length ? others.map((n) => <span key={n} className="row" style={{ gap: 4 }}><Avatar name={n} color={colorOf(n)} size={22} />{n}</span>) : "-"}</dd>
                 </div>
                 <div>
-                  <dt>Diambil</dt>
+                  <dt>Mulai dikerjakan</dt>
                   <dd>{fmtDateTime(task.startedAt)}</dd>
                 </div>
                 <div>
@@ -325,11 +322,11 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
             {editingResults ? (
               <>
                 <LinksEditor links={task.resultLinks} label="Link hasil baru"
-                  onChange={(links) => links.length ? run(() => actions.setResultLinks(task.id, links)) : run(() => Promise.reject(new Error("Task Finish wajib punya minimal satu link hasil.")))} />
+                  onChange={(links) => run(() => actions.setResultLinks(task.id, links))} />
                 <button type="button" className="btn btn-neutral" style={{ alignSelf: "flex-start" }} onClick={() => setEditingResults(false)}>Selesai mengubah</button>
               </>
             ) : (
-              <LinkList links={task.resultLinks} emptyText="Belum ada. Link hasil diminta saat task dipindah ke Finish." />
+              <LinkList links={task.resultLinks} emptyText="Belum ada link hasil (opsional)." />
             )}
           </section>
 
@@ -337,14 +334,24 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
         </div>
 
         <div className="detail-foot">
-          {task.status === "request" ? (
+          {task.status === "request" && !task.pic ? (
             <div className="grid-2 keep primary" style={{ gap: 8 }}>
               {designers.map((d) => (
-                <button key={d.email} type="button" className="btn btn-lg btn-outline" style={{ borderColor: d.color, color: d.color }} disabled={busy} onClick={() => onTake(task, d.name)}>
-                  Ambil: {d.name}
+                <button key={d.email} type="button" className="btn btn-lg btn-outline" style={{ borderColor: d.color, color: d.color }} disabled={busy} onClick={() => onAssign(task, d.name)}>
+                  PIC: {d.name}
                 </button>
               ))}
             </div>
+          ) : task.status === "request" ? (
+            <>
+              <button type="button" className="btn btn-secondary btn-lg move" onClick={() => onMove(task)}>
+                <ArrowLeftRight size={16} aria-hidden="true" /> Pindah ke…
+              </button>
+              <button type="button" className="btn btn-primary btn-cta primary" disabled={busy || !canLeaveRequest(task, member)} title={canLeaveRequest(task, member) ? undefined : notPicMessage(task.pic)} onClick={() => onStart(task)}>
+                <Play size={18} aria-hidden="true" /> Mulai kerjakan
+              </button>
+              {!canLeaveRequest(task, member) && <p className="small muted" style={{ width: "100%" }}>{notPicMessage(task.pic)}</p>}
+            </>
           ) : (
             <>
               <button type="button" className="btn btn-secondary btn-lg move" onClick={() => onMove(task)}>
@@ -352,7 +359,7 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
               </button>
               {task.status === "on_progress" && (
                 <button type="button" className="btn btn-primary btn-cta primary" disabled={busy} onClick={() => onMove(task, "finish")}>
-                  <Check size={18} aria-hidden="true" /> Selesai, kirim link hasil
+                  <Check size={18} aria-hidden="true" /> Selesai
                 </button>
               )}
               {task.status === "delay" && (

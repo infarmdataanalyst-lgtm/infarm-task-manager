@@ -91,10 +91,11 @@ export function toRow(fields) {
 
 // ─── Aturan pindah kolom (padanan trigger tasks_before_update di SQL) ──
 // Dipakai mode uji coba; di mode Supabase database yang menjalankannya.
-export function applyTransition(current, changes, now = new Date().toISOString()) {
+// actor = anggota yang login ({ name, role }); null = sistem (tidak dibatasi).
+export function applyTransition(current, changes, now = new Date().toISOString(), actor = null) {
   const next = { ...current, ...changes };
   if (next.status !== current.status) {
-    if (next.status === "request") next.pic = null;
+    if (current.status === "request" && actor && !canLeaveRequest(next, actor)) throw new Error(notPicMessage(next.pic));
     if (next.status === "on_progress" && !next.startedAt) next.startedAt = now;
     if (next.status === "finish") next.finishedAt = now;
     else if (current.status === "finish") next.finishedAt = null;
@@ -104,7 +105,6 @@ export function applyTransition(current, changes, now = new Date().toISOString()
   }
   if (next.status !== "delay") next.delayReason = null;
   if (next.status !== "request" && !next.pic) throw new Error("Pilih PIC dulu sebelum memindah task dari Request.");
-  if (next.status === "finish" && !arr(next.resultLinks).length) throw new Error("Isi minimal satu link hasil desain.");
   return next;
 }
 
@@ -135,7 +135,8 @@ export function taskChanges(before, after) {
   return changes;
 }
 
-export function historyAction(oldStatus, newStatus) {
+export function historyAction(oldStatus, newStatus, oldPic = null, newPic = null) {
+  if (oldStatus === "request" && newStatus === "request" && oldPic !== newPic) return newPic ? "pic_ditentukan" : "pic_dilepas";
   if (oldStatus === newStatus) return "diubah";
   if (oldStatus === "request" && newStatus === "on_progress") return "diambil";
   if (oldStatus === "finish") return "revisi";
@@ -145,6 +146,11 @@ export function historyAction(oldStatus, newStatus) {
   if (newStatus === "request") return "dilepas";
   return "dipindah";
 }
+
+// ─── PIC dan izin memulai (padanan pemeriksaan 'bukan_pic' di tasks_before_update) ──
+// PIC ditentukan di kolom Request. Yang boleh memindahkan task keluar dari Request hanya PIC itu sendiri atau admin.
+export const canLeaveRequest = (task, member) => !!member && (member.role === "admin" || (!!task.pic && task.pic === member.name));
+export const notPicMessage = (pic) => (pic ? `Hanya ${pic} (PIC) atau admin yang bisa memulai task ini.` : "Tentukan PIC dulu sebelum memindah task dari Request.");
 
 // ─── Turunan untuk tampilan ─────────────────────────────────────
 

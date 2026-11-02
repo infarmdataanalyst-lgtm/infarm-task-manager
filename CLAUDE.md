@@ -41,17 +41,18 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - "Baru" = task di kolom Request yang belum pernah dibuka akun itu (`task_reads`). Banner menampilkan yang masuk setelah "Lihat" terakhir diklik (waktu klik disimpan per akun di localStorage `infarm_banner_seen_<email>`).
    - Board mengambil ulang data tiap 60 detik selama tab terlihat, sebagai cadangan bila Realtime terputus.
 3. **Kolom Kanban: Request → On Progress → Delay → Finish** (tidak ada Todo).
-   - **Request:** kartu punya tombol nama desainer langsung (**Arum** / **Denny**). Klik = jadi PIC + pindah ke On Progress + waktu kerja mulai. PIC tidak ditentukan dari siapa yang login.
+   - **Request:** PIC ditentukan di sini (diubah 2 Nov 2026). Kartu tanpa PIC punya tombol nama desainer (**Arum** / **Denny**): klik = jadi PIC, kartu **tetap di Request**. PIC bisa diganti selama masih di Request (tombol "Ganti PIC ke …" di kartu, pilihan PIC di detail).
+   - **Mulai kerjakan** (Request → On Progress, juga geser kartu / "Pindah ke…"): **hanya akun PIC itu sendiri atau admin**. Akun lain melihat tombol nonaktif + "Hanya <PIC> (PIC) atau admin yang bisa memulai task ini." Desainer yang memindah task tanpa PIC otomatis menjadi PIC; admin memilih PIC di dialog. Dikunci di database (`bukan_pic` di `tasks_before_update`; perubahan dari SQL Editor tidak dibatasi).
    - **On Progress:** sedang dikerjakan; waktu kerja berjalan.
    - **Delay:** ditunda **manual** karena menunggu sesuatu (mis. bahan dari requester). Waktu kerja berhenti selama di Delay.
-   - **Finish:** wajib minimal satu **link hasil**. Waktu kerja berhenti.
+   - **Finish:** **link hasil opsional** (sejak 2 Nov 2026). Waktu kerja berhenti.
    - **Terlambat** (lewat deadline) bukan kolom: badge merah di kolom mana pun kecuali Finish.
    - **Urutan kartu:** deadline terdekat paling atas (Request, On Progress, Delay). Finish: yang terakhir selesai paling atas.
 4. **Pindah kolom maju dan mundur** lewat **geser kartu** (desktop) dan tombol **"Pindah ke…"** (desktop dan HP):
-   - Dari Request ke kolom lain tanpa PIC: dialog pilih PIC dulu.
-   - Ke Finish: dialog link hasil (wajib).
+   - Dari Request ke kolom lain: hanya PIC atau admin (lihat di atas).
+   - Ke Finish: dialog link hasil (opsional).
    - Finish → On Progress/Delay = **revisi**; waktu kerja melanjutkan total sebelumnya.
-   - Ke Request: PIC dilepas; waktu yang sudah tercatat tetap disimpan.
+   - Ke Request: **PIC tetap**; waktu yang sudah tercatat tetap disimpan.
 5. **Kerja bersama:** satu task bisa dikerjakan Denny dan Arum. PIC tetap satu (penanggung jawab: pindah kolom, isi link hasil). Tim membagi **checklist** di detail task; tiap item punya pengerja (`assignee`). Tidak ada link per item checklist; link referensi per task.
 6. **Waktu (time tracking), diubah 2 Nov 2026:**
    - Dimulai saat **request masuk** dan berhenti saat **Finish**. Dicatat **per kolom**: berapa lama di Request (menunggu diambil), di On Progress (dikerjakan), dan di Delay, plus **total**.
@@ -69,8 +70,8 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - Hanya tim desain/admin yang bisa mengedit isi request.
 9. **Hapus = arsip** (soft delete). Task hilang dari board, tetap ada di database beserta riwayatnya; admin bisa memulihkan.
 10. **Audit / riwayat perubahan:** semua perubahan dicatat otomatis oleh database beserta **akun Google pelakunya**: dibuat, edit field, pindah kolom, ganti PIC, checklist, lampiran, link hasil, hapus/pulihkan, dan penghapusan lampiran otomatis (pelaku "sistem"). Riwayat tidak bisa diubah atau dihapus siapa pun. Tampil di detail task; halaman audit lengkap untuk admin.
-11. **Pencarian judul** di bagian paling atas board (search bar di header hijau).
-12. **Analitik per orang:** task selesai, persen tepat waktu, rata-rata waktu kerja per task (On Progress), rata-rata menunggu diambil (Request), jumlah masuk Delay. Bisa dibandingkan dengan **minggu lalu** atau **bulan lalu** (naik/turun ditampilkan, hijau = membaik, merah = memburuk).
+11. **Pencarian** di bagian paling atas board (search bar di header hijau): judul, brief, nama requester, dan divisi; tidak peka huruf besar/kecil, cocok sebagian. Saat mencari (≥2 huruf) board juga mencari ke database (`searchTasks`) sehingga task Finish lama yang tidak dimuat tetap ketemu (label "Dari arsip lama"); hasil Finish saat mencari tidak dibatasi 30 hari.
+12. **Analitik per orang:** task selesai, persen tepat waktu, rata-rata waktu kerja per task (On Progress), rata-rata menunggu dikerjakan (Request sampai On Progress), jumlah masuk Delay. Bisa dibandingkan dengan **minggu lalu** atau **bulan lalu** (naik/turun ditampilkan, hijau = membaik, merah = memburuk).
     - Periode: **Minggu ini** · **Bulan ini** saja (`lib/periods.js`, diubah 2 Nov 2026). Selalu periode penuh vs periode penuh tepat sebelumnya: Minggu ini 2–8 Nov vs 26 Okt – 1 Nov; Bulan ini 1–30 Nov vs 1–31 Okt. Minggu = Senin–Minggu, bulan = kalender. Karena periode ini masih berjalan, tampil keterangan "periode masih berjalan, hari ke-n dari 7/30".
     - Grafik per orang: task selesai per hari (minggu) atau per minggu (bulan), batang periode ini vs pembanding.
 13. **Halaman Anggota (admin):** tambah Gmail + nama + peran + warna; ubah peran/warna; nonaktifkan (langsung tidak bisa masuk); hapus hanya untuk anggota nonaktif. Akun sendiri tidak bisa diturunkan/dinonaktifkan dari UI, dan database menolak bila tidak tersisa admin aktif (`team_members_admin_guard`, pesan `admin_terakhir`). Nama tidak bisa diubah (dipakai sebagai PIC).
@@ -119,7 +120,7 @@ Environment variable (atur di Vercel → Settings → Environment Variables):
 
 Langkah menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md`.
 
-Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 foto + 1 PDF + link; banner dan badge "Baru" muncul di board; Ambil lewat tombol Arum/Denny; checklist dibagi dua orang; geser ke Delay (waktu berhenti) lalu kembali; Finish (wajib link); revisi dari Finish; cek riwayat dan audit; cek tampilan HP (lebar 390px). Tahap 2: tambah/nonaktifkan/hapus anggota; hapus task lalu pulihkan di Audit; tambah/hapus lampiran dari detail; analitik Minggu lalu vs 2 minggu lalu.
+Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 foto + 1 PDF + link; banner dan badge "Baru" muncul di board; Ambil lewat tombol Arum/Denny; checklist dibagi dua orang; geser ke Delay (waktu berhenti) lalu kembali; Finish (wajib link); revisi dari Finish; cek riwayat dan audit; cek tampilan HP (lebar 390px). Tahap 2: tambah/nonaktifkan/hapus anggota; hapus task lalu pulihkan di Audit; tambah/hapus lampiran dari detail; analitik Minggu ini vs minggu lalu. 2 Nov 2026: tentukan PIC (tetap di Request), akun lain tidak bisa memulai, PIC memulai; Finish tanpa link; cari brief/requester/divisi.
 
 ## Model data (v8)
 
@@ -132,7 +133,7 @@ Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 f
   delayReason: string | null,            // opsional, diisi saat pindah ke Delay
   attachments: [{ id, name, size, type: "image" | "pdf", path, url, thumbPath?, thumbUrl? }],  // maks 5
   referenceLinks: [{ id, url }],
-  resultLinks: [{ id, url }],            // wajib ≥1 saat finish
+  resultLinks: [{ id, url }],            // opsional (dulu wajib saat finish)
   checklist: [{ id, text, done, assignee, doneAt, position }],   // tabel task_checklist
   workSessions: [{ status: "request" | "on_progress" | "delay", startedAt, endedAt }],  // sesi waktu per kolom (lib/worktime.js: stageMinutes)
   createdAt, startedAt, finishedAt, attachmentsDeletedAt, deletedAt, updatedAt,
@@ -141,7 +142,7 @@ Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 f
 
 Tabel Supabase v8:
 
-- `tasks`: kolom di atas (snake_case). Constraint: `tasks_pic_wajib`, `tasks_link_hasil_wajib`. `deleted_at`/`deleted_by` untuk arsip.
+- `tasks`: kolom di atas (snake_case). Constraint: `tasks_pic_wajib` (`tasks_link_hasil_wajib` dihapus 2 Nov 2026). `deleted_at`/`deleted_by` untuk arsip.
 - `task_checklist`: 1 baris per item (sudah ada di v7).
 - `work_sessions`: `task_id`, `status` (kolom: request/on_progress/delay), `started_at`, `ended_at` (null = sedang berjalan). Request baru membuka sesi `request`; setiap pindah kolom menutup sesi lama dan membuka sesi kolom baru; Finish hanya menutup. Menit dihitung hanya jam kerja Senin–Jumat 08.00–17.00 WIB (`work_minutes()` di SQL = `workMinutesBetween()` di JS). `schema.sql` melengkapi data lama sekali (waktu Request = `created_at` sampai `started_at`).
 - `task_history`: audit, ditulis trigger database. `actor_email`, `actor_name` (requester: nama dari form; otomatis: "sistem"), `action`, `changes [{field, before, after}]`. Tidak ada izin UPDATE/DELETE untuk siapa pun.
@@ -152,8 +153,8 @@ Tabel Supabase v8:
 Tidak ada migrasi v7 → v8: skema v7 tidak pernah dijalankan di database produksi (proyek Supabase dibuat baru untuk v8). `schema.sql` v8 ditulis untuk database baru dan aman dijalankan ulang.
 
 Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition` + `localStore.js`):
-- `tasks_before_update`: pindah ke Request → PIC dilepas; masuk On Progress pertama kali → `started_at`; masuk Finish → `finished_at`, keluar dari Finish → dikosongkan; selain Delay → `delay_reason` dikosongkan; arsip → `deleted_by`; task terarsip hanya bisa diubah admin.
-- `tasks_after_write`: buka/tutup `work_sessions` per kolom, tulis `task_history` (`dibuat` oleh requester, lalu `diambil`, `ditunda`, `dilanjutkan`, `selesai`, `revisi`, `dilepas`, `dipindah`, `diubah`, `dihapus`, `dipulihkan`, `lampiran_dihapus`).
+- `tasks_before_update`: keluar dari Request hanya oleh PIC/admin (`bukan_pic`); masuk On Progress pertama kali → `started_at`; masuk Finish → `finished_at`, keluar dari Finish → dikosongkan; selain Delay → `delay_reason` dikosongkan; arsip → `deleted_by`; task terarsip hanya bisa diubah admin.
+- `tasks_after_write`: buka/tutup `work_sessions` per kolom, tulis `task_history` (`dibuat` oleh requester, `pic_ditentukan`/`pic_dilepas` (ganti PIC di Request), `diambil` (= mulai dikerjakan), `ditunda`, `dilanjutkan`, `selesai`, `revisi`, `dilepas`, `dipindah`, `diubah`, `dihapus`, `dipulihkan`, `lampiran_dihapus`).
 - `checklist_after_write`: riwayat `checklist` (lewati bila task-nya dihapus permanen).
 
 ## Aturan tata letak UI (v8, acuan: mockup)
@@ -167,7 +168,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
    - HP: tab diganti **menu bawah** (Kanban · Analitik · Akun; admin: Kanban · Analitik · Admin).
    - Analitik: tab → periode + pembanding (minggu lalu / bulan lalu) → kartu per orang → per kategori/divisi.
    - Di HP, chip angka jadi satu baris yang bisa digeser.
-4. **Anatomi kartu:** badge (Baru / Terlambat) + deadline di kanan → judul → kategori · requester (divisi) → lampiran mini (maks 3 thumbnail + "+2", PDF sebagai ikon) → PIC + "bersama …" → waktu kerja → progres checklist → aksi (Request: tombol Arum/Denny; lainnya: "Pindah ke…").
+4. **Anatomi kartu:** badge (Baru / Terlambat) + deadline di kanan → judul → kategori · requester (divisi) → lampiran mini (maks 3 thumbnail + "+2", PDF sebagai ikon) → PIC + "bersama …" → waktu kerja → progres checklist → aksi (Request tanpa PIC: "Tentukan PIC" + tombol Arum/Denny; Request ber-PIC: "Mulai kerjakan" (PIC/admin) + "Ganti PIC ke …"; lainnya: "Pindah ke…").
 5. **Detail pop-up:** maks 760px di tengah dengan latar redup (HP: layar penuh). Kanan atas: Edit (hijau), Hapus (merah), Tutup (abu-abu). Aksi pindah kolom di bawah.
 6. **Desktop dan HP memakai komponen yang sama**; HP hanya beda ukuran sentuh (44px) dan susunan menumpuk. Dialog di HP muncul dari bawah dengan tombol utama di atas.
 7. **Lebar konten:** halaman tim 1400px, form request 1040px (halaman terkirim 760px).
@@ -262,7 +263,7 @@ src/pages/
 ## Masalah yang diketahui
 
 - **Mode uji coba** (tanpa env Supabase): data hanya di browser; banner "Mode uji coba" tampil; login memakai akun tiruan (tanpa keamanan). PDF > 1 MB tidak disimpan isinya.
-- **Daftar task dibatasi 500 terbaru** (`LIST_LIMIT` di `supabaseStore.js`). Tambahkan paginasi bila task lebih banyak.
+- **Board memuat semua task yang belum Finish + 500 task Finish yang paling baru selesai** (`FINISHED_LIMIT` di `supabaseStore.js`). Task Finish yang lebih lama tidak dihapus: tetap di database, bisa ditemukan lewat pencarian dan dibuka lewat link `/tim/task/:id`. Analitik dan Export CSV hanya memakai task yang dimuat.
 - **Realtime mengambil ulang seluruh daftar** setiap ada perubahan (jeda 300 ms). Cukup untuk volume tim.
 - **File yatim** bisa tersisa jika upload berhasil tapi simpan task gagal. Penghapus lampiran terjadwal v8 sebaiknya juga membersihkan file tanpa task.
 - **Supabase Free dijeda** setelah 7 hari tanpa aktivitas; tugas terjadwal ikut berhenti selama dijeda.

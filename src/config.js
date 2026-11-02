@@ -22,7 +22,7 @@ export const DIVISIONS = ["Sales Team", "Bidev Team", "HRD", "Marketing", "Manag
 export const STATUSES = ["request", "on_progress", "delay", "finish"];
 
 export const STATUS = {
-  request: { label: "Request", note: "belum ada PIC" },
+  request: { label: "Request", note: "tentukan PIC di sini" },
   on_progress: { label: "On Progress", note: "waktu berjalan" },
   delay: { label: "Delay", note: "waktu berhenti" },
   finish: { label: "Finish", note: "30 hari terakhir" },
