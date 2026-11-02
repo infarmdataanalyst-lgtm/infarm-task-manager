@@ -186,6 +186,21 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 - Link diketik tanpa `https://` tetap diterima: pakai `normalizeUrl`, dan input link memakai `type="text" inputMode="url"`.
 - Waktu kerja: satu fungsi perhitungan jam kerja di SQL dan padanannya di JS (untuk angka berjalan di layar) harus selalu sama.
 
+## Rencana perubahan berikutnya (disepakati 2 Nov 2026, BELUM dikerjakan)
+
+Dicatat atas permintaan pemilik proyek; kerjakan dalam satu PR setelah diminta. Bagian spesifikasi di atas belum diubah dan masih menggambarkan kode saat ini.
+
+1. **Link hasil desain opsional.** Lepas `tasks_link_hasil_wajib` di `schema.sql` (`alter table ... drop constraint if exists`), dialog Finish (kolom link tetap ada, boleh kosong), `applyTransition`/`localStore`. Detail dan CSV menampilkan "–" bila kosong. Perlu menjalankan ulang `schema.sql` sebelum merge.
+2. **Pencarian** mencakup judul, brief (`description`), nama requester, dan divisi requester. Tidak peka huruf besar/kecil, cocok sebagian kata. Placeholder: "Cari judul, brief, requester, atau divisi".
+3. **PIC ditentukan di kolom Request:**
+   - Klik tombol Arum/Denny di kartu Request = PIC terisi, kartu **tetap di Request** (tampil nama PIC). Waktu "Di Request" tetap berjalan.
+   - Pindah ke On Progress (tombol "Mulai kerjakan", geser kartu, atau "Pindah ke…") **hanya oleh akun PIC itu sendiri dan admin**. Akun lain: tombol nonaktif dengan keterangan "Hanya <PIC> yang bisa memulai". Dikunci juga di database (trigger `tasks_before_update`), bukan hanya di UI.
+   - PIC **bisa diganti** selama task masih di Request.
+   - Task yang dikembalikan ke Request dari kolom lain: **PIC tetap** (tidak lagi dilepas).
+   - Usulan yang belum dijawab eksplisit (pakai bila tidak ada keberatan): label analitik "menunggu diambil" → "menunggu dikerjakan" (request masuk sampai On Progress); riwayat mencatat "PIC ditentukan: <nama>" lalu "Mulai dikerjakan".
+4. **Batas 500 task = disembunyikan, bukan dihapus.** Task yang belum Finish selalu dimuat semua; task Finish dimuat dari yang paling baru selesai (`finished_at desc`), yang paling lama selesai tidak dimuat lebih dulu. Kolom Finish tetap default 30 hari terakhir + "Lihat … lainnya". Tidak ada penghapusan permanen otomatis.
+   - Pertanyaan terbuka: pencarian task lama yang tidak dimuat. Usulan: saat mengetik ≥2 huruf, juga cari di database (judul/brief/requester/divisi, `ilike`), hasil dari luar daftar dimuat tampil di kolom Finish dengan label "dari arsip lama". Tunggu persetujuan.
+
 ## Tahapan v8
 
 - **Tahap 1 (sudah):** skema v8 + RLS + trigger, login Google + `team_members`, form `/` foto + PDF maks 5 + thumbnail, board 4 kolom (urut deadline), geser kartu + "Pindah ke…", tombol Arum/Denny di kartu Request, pop-up detail (Edit/Hapus/Tutup), checklist per orang, waktu kerja jam kerja, riwayat di detail, hapus = arsip, pencarian judul, filter Tugas saya/PIC/deadline, menu bawah HP.
