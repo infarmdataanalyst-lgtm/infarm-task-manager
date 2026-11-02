@@ -122,7 +122,10 @@ export async function createTask(input) {
       thumbUrl: a.thumbBlob ? await blobToDataUrl(a.thumbBlob) : null,
     });
   }
-  const task = normalizeTask({ ...input, attachments, id: newId(), status: "request", pic: null, createdAt: now, updatedAt: now });
+  const task = normalizeTask({
+    ...input, attachments, id: newId(), status: "request", pic: null, createdAt: now, updatedAt: now,
+    workSessions: [{ status: "request", startedAt: now, endedAt: null }],
+  });
   write([...getCache(), task]);
   logHistory(task.id, `${task.requesterName || "requester"} (requester)`, "dibuat");
   return task;

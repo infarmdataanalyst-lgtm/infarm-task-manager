@@ -15,7 +15,8 @@ export function normalizeChecklistItem(c, i = 0) {
   };
 }
 
-const normalizeSession = (w) => ({ startedAt: w.startedAt ?? w.started_at, endedAt: w.endedAt ?? w.ended_at ?? null });
+// Sesi waktu per kolom (status: request | on_progress | delay). Data lama tanpa status = on_progress.
+const normalizeSession = (w) => ({ status: w.status || "on_progress", startedAt: w.startedAt ?? w.started_at, endedAt: w.endedAt ?? w.ended_at ?? null });
 
 export function normalizeTask(t) {
   return {
@@ -97,9 +98,9 @@ export function applyTransition(current, changes, now = new Date().toISOString()
     if (next.status === "on_progress" && !next.startedAt) next.startedAt = now;
     if (next.status === "finish") next.finishedAt = now;
     else if (current.status === "finish") next.finishedAt = null;
-    // Sesi waktu kerja: buka saat masuk On Progress, tutup saat keluar.
-    if (next.status === "on_progress") next.workSessions = [...current.workSessions, { startedAt: now, endedAt: null }];
-    else if (current.status === "on_progress") next.workSessions = current.workSessions.map((w) => (w.endedAt ? w : { ...w, endedAt: now }));
+    // Sesi waktu per kolom: tutup sesi lama, buka sesi kolom baru (kecuali Finish).
+    const closed = current.workSessions.map((w) => (w.endedAt ? w : { ...w, endedAt: now }));
+    next.workSessions = next.status === "finish" ? closed : [...closed, { status: next.status, startedAt: now, endedAt: null }];
   }
   if (next.status !== "delay") next.delayReason = null;
   if (next.status !== "request" && !next.pic) throw new Error("Pilih PIC dulu sebelum memindah task dari Request.");

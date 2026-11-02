@@ -71,7 +71,9 @@ Kalau ada langkah yang gagal, kirim screenshot ke developer.
 
 ## Catatan
 
-- **Anggota baru:** tambahkan Gmail-nya di Google (Test users) **dan** di tabel `team_members` (tahap 2: lewat halaman Anggota).
+- **Anggota baru:** tambahkan Gmail-nya di tabel `team_members` (tahap 2: lewat halaman Anggota) **dan**, bila Google Auth Platform → Audience masih **Testing**, di **Test users**.
+- **Ganti akun uji coba dengan akun asli:** jalankan [`supabase/reset-anggota.sql`](../supabase/reset-anggota.sql) (isi Gmail asli dulu). Di bagian bawahnya ada baris opsional untuk mengosongkan semua task uji coba.
+- **Setelah memperbarui kode dari GitHub:** jalankan ulang `supabase/schema.sql` **sebelum** deploy (aman dijalankan ulang). Perubahan 2 Nov 2026 (waktu per kolom) membutuhkan ini.
 - **Paket Free** cukup untuk volume tim. Pantau di dashboard Supabase → **Usage**.
 - **Proyek dijeda** jika 7 hari tidak dipakai. Kalau situs tidak bisa memuat data setelah libur, buka dashboard Supabase dan klik **Restore project**.
 - **Backup:** paket Free tidak menyediakan backup yang bisa diunduh. Gunakan **Export CSV** di board secara berkala.

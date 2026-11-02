@@ -12,7 +12,7 @@ import { fromRow, normalizeChecklistItem, normalizeTask, toRow } from "./taskMod
 
 const BUCKET = "references";
 const LIST_LIMIT = 500;
-const SELECT_TASK = "*, checklist:task_checklist(*), workSessions:work_sessions(started_at, ended_at)";
+const SELECT_TASK = "*, checklist:task_checklist(*), workSessions:work_sessions(status, started_at, ended_at)";
 
 // ─── Pesan error yang bisa dipahami pengguna ────────────────────
 

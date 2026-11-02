@@ -121,7 +121,9 @@ create table if not exists public.task_checklist (
 );
 create index if not exists task_checklist_task_idx on public.task_checklist (task_id, position);
 
--- ─── Sesi waktu kerja: dibuka saat masuk On Progress, ditutup saat keluar ──
+-- ─── Sesi waktu per kolom: dari request masuk sampai Finish ─────
+-- Setiap pindah kolom menutup sesi lama dan membuka sesi baru (status = kolomnya).
+-- Masuk Finish menutup sesi tanpa membuka yang baru; revisi membuka sesi lagi.
 create table if not exists public.work_sessions (
   id bigint generated always as identity primary key,
   task_id uuid not null references public.tasks (id) on delete cascade,
@@ -129,8 +131,30 @@ create table if not exists public.work_sessions (
   ended_at timestamptz,
   started_by text
 );
+alter table public.work_sessions add column if not exists status text not null default 'on_progress';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'work_sessions_status_check') then
+    alter table public.work_sessions add constraint work_sessions_status_check check (status in ('request', 'on_progress', 'delay'));
+  end if;
+end;
+$$;
 create index if not exists work_sessions_task_idx on public.work_sessions (task_id);
 create unique index if not exists work_sessions_satu_berjalan on public.work_sessions (task_id) where ended_at is null;
+
+-- Lengkapi data lama (sebelum waktu per kolom ada), sekali saja:
+-- 1) waktu di Request = dari request masuk sampai pertama diambil;
+-- 2) task yang sedang di Request/Delay tanpa sesi berjalan dibuka sesinya.
+insert into public.work_sessions (task_id, status, started_at, ended_at)
+select t.id, 'request', t.created_at, t.started_at
+from public.tasks t
+where t.started_at is not null
+  and not exists (select 1 from public.work_sessions w where w.task_id = t.id and w.status = 'request');
+insert into public.work_sessions (task_id, status, started_at)
+select t.id, t.status, case when t.status = 'request' and t.started_at is null then t.created_at else t.updated_at end
+from public.tasks t
+where t.status in ('request', 'delay')
+  and not exists (select 1 from public.work_sessions w where w.task_id = t.id and w.ended_at is null);
 
 -- ─── Riwayat / audit: hanya ditulis trigger, tidak bisa diubah ──
 create table if not exists public.task_history (
@@ -290,12 +314,13 @@ declare
   v_changes jsonb;
   v_action text;
 begin
-  -- Sesi waktu kerja hanya berjalan selama On Progress.
-  if new.status = 'on_progress' and (tg_op = 'INSERT' or old.status <> 'on_progress') then
-    insert into public.work_sessions (task_id, started_by) values (new.id, nullif(public.current_email(), ''))
-    on conflict do nothing;
-  elsif tg_op = 'UPDATE' and old.status = 'on_progress' and new.status <> 'on_progress' then
+  -- Sesi waktu per kolom: tutup sesi lama, buka sesi kolom baru (kecuali Finish).
+  if tg_op = 'UPDATE' and new.status is distinct from old.status then
     update public.work_sessions set ended_at = now() where task_id = new.id and ended_at is null;
+  end if;
+  if new.status <> 'finish' and (tg_op = 'INSERT' or new.status is distinct from old.status) then
+    insert into public.work_sessions (task_id, status, started_by) values (new.id, new.status, nullif(public.current_email(), ''))
+    on conflict do nothing;
   end if;
 
   if tg_op = 'INSERT' then
