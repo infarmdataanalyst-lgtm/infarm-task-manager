@@ -2,11 +2,12 @@
 // tab Kanban/Analitik (HP: menu bawah). Data board hanya bisa dibaca anggota (ditegakkan database).
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { BarChart3, ChevronDown, Copy, Download, LayoutDashboard, LogOut, Search, UserRound } from "lucide-react";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { BarChart3, ChevronDown, Copy, Download, Inbox, LayoutDashboard, LogOut, Search, UserRound } from "lucide-react";
 import { LOCAL_MEMBERS, STORAGE_MODE } from "../../config";
 import { signInLocal, signInWithGoogle, signOut, useAuth } from "../../data/auth";
 import { useTasks } from "../../data/useTasks";
+import { useReads } from "../../data/useReads";
 import { downloadCsv } from "../../lib/csv";
 import { AppHeader, Avatar, LocalModeBanner, Modal, useToast } from "../../components/ui";
 
@@ -90,7 +91,7 @@ function AccountMenu({ auth, onCopy, onExport, mobile, onClose }) {
       </div>
       {mobile && (
         <>
-          <button type="button" className="menu-item" onClick={onCopy}><Copy size={16} aria-hidden="true" /> Salin link form request</button>
+          <button type="button" className="menu-item" onClick={onCopy}><Copy size={16} aria-hidden="true" /> Salin &amp; buka form request</button>
           <button type="button" className="menu-item" onClick={onExport}><Download size={16} aria-hidden="true" /> Export CSV</button>
         </>
       )}
@@ -116,8 +117,36 @@ export default function TeamLayout() {
 }
 
 // Hanya dirender setelah login sebagai anggota, jadi data task baru dimuat saat aksesnya ada.
+// Banner "request baru": tetap tampil sampai "Lihat" diklik. Waktu klik terakhir disimpan per akun di perangkat ini;
+// banner muncul lagi bila ada request baru yang masuk setelahnya.
+const bannerKey = (email) => `infarm_banner_seen_${email}`;
+const readBannerSeen = (email) => {
+  try {
+    return localStorage.getItem(bannerKey(email));
+  } catch {
+    return null;
+  }
+};
+
+function NewRequestBanner({ items, onSee }) {
+  if (!items.length) return null;
+  return (
+    <div className="new-banner" role="status">
+      <span className="icon"><Inbox size={18} aria-hidden="true" /></span>
+      <p className="grow">
+        <strong>{items.length} request baru masuk</strong>
+        <span className="hide-mobile"> · {items.slice(0, 3).map((t) => `${t.title} (${t.division})`).join(", ")}{items.length > 3 ? ", …" : ""}</span>
+      </p>
+      <button type="button" className="btn" onClick={onSee}>Lihat</button>
+    </div>
+  );
+}
+
 function TeamApp({ auth }) {
   const { tasks: allTasks } = useTasks();
+  const { isNew, markRead } = useReads(auth.email);
+  const navigate = useNavigate();
+  const [bannerSeenAt, setBannerSeenAt] = useState(() => readBannerSeen(auth.email));
   const [toast, showToast] = useToast();
   const { pathname } = useLocation();
   const [query, setQuery] = useState("");
@@ -137,17 +166,31 @@ function TeamApp({ auth }) {
   const members = useMemo(() => (auth.members || []).filter((m) => m.active), [auth.members]);
   const designers = useMemo(() => members.filter((m) => m.role === "designer"), [members]);
   const tasks = useMemo(() => allTasks.filter((t) => !t.deletedAt), [allTasks]);
+  const freshRequests = tasks
+    .filter((t) => isNew(t) && (!bannerSeenAt || new Date(t.createdAt) > new Date(bannerSeenAt)))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const seeNewRequests = () => {
+    const now = new Date().toISOString();
+    setBannerSeenAt(now);
+    try {
+      localStorage.setItem(bannerKey(auth.email), now);
+    } catch {}
+    navigate("/tim", { state: { focus: "request", at: now } });
+  };
 
   const colorOf = (name) => members.find((m) => m.name === name)?.color || "#6b7280";
 
+  // Salin link form sekaligus membukanya di tab baru (window.open harus sebelum await supaya tidak diblokir browser).
   const copyRequestLink = async () => {
     const url = `${window.location.origin}/`;
     setSheetOpen(false);
+    window.open(url, "_blank", "noopener");
     try {
       await navigator.clipboard.writeText(url);
-      showToast(`Link form request disalin: ${url}`);
+      showToast(`Link form request disalin dan dibuka di tab baru: ${url}`);
     } catch {
-      showToast(`Salin link ini secara manual: ${url}`, "error");
+      showToast(`Form dibuka di tab baru. Salin link ini secara manual: ${url}`, "error");
     }
   };
   const exportCsv = () => {
@@ -172,7 +215,7 @@ function TeamApp({ auth }) {
           <Search size={18} aria-hidden="true" />
         </button>
         <button type="button" className="btn btn-on-green hide-mobile" onClick={copyRequestLink}>
-          <Copy size={16} aria-hidden="true" /> <span className="btn-label">Salin link form</span>
+          <Copy size={16} aria-hidden="true" /> <span className="btn-label">Salin &amp; buka form</span>
         </button>
         <button type="button" className="btn btn-on-green hide-mobile" onClick={exportCsv}>
           <Download size={16} aria-hidden="true" /> <span className="btn-label">Export CSV</span>
@@ -194,11 +237,12 @@ function TeamApp({ auth }) {
       </AppHeader>
       <main className="container page">
         <LocalModeBanner />
+        <NewRequestBanner items={freshRequests} onSee={seeNewRequests} />
         <nav className="tabs hide-mobile" aria-label="Tampilan">
           <Link to="/tim" className={`tab ${onAnalytics ? "" : "active"}`} aria-current={onAnalytics ? undefined : "page"}>Kanban</Link>
           <Link to="/tim/analitik" className={`tab ${onAnalytics ? "active" : ""}`} aria-current={onAnalytics ? "page" : undefined}>Analitik</Link>
         </nav>
-        <Outlet context={{ tasks, showToast, query, member: auth.member, members, designers, colorOf }} />
+        <Outlet context={{ tasks, showToast, query, member: auth.member, members, designers, colorOf, isNew, markRead }} />
       </main>
       <nav className="bottom-nav" aria-label="Navigasi utama">
         <Link to="/tim" className={onAnalytics ? "" : "active"} aria-current={onAnalytics ? undefined : "page"}><LayoutDashboard size={22} aria-hidden="true" />Kanban</Link>

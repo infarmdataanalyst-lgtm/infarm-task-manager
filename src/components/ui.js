@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, FileText, Link as LinkIcon, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link as LinkIcon, X } from "lucide-react";
 import { STATUS, STORAGE_MODE } from "../config";
 import { displayUrl } from "../lib/links";
 import { fmtBytes } from "../lib/images";
@@ -118,16 +118,64 @@ export function Modal({ labelledBy, onClose, className = "", children }) {
   );
 }
 
-export function Lightbox({ image, onClose }) {
+// Pratinjau foto layar penuh. images: [{ name, url }]; bisa digeser dengan tombol, panah keyboard, atau geser jari.
+export function Lightbox({ images, index: startIndex = 0, onClose }) {
+  const [index, setIndex] = useState(startIndex);
+  const touchX = useRef(null);
+  const count = images.length;
+  const go = useCallback((step) => setIndex((i) => (i + step + count) % count), [count]);
   useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      } else if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose, go]);
+  const image = images[index];
   return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label={image.name} onClick={onClose}>
-      <img src={image.url} alt={image.name} onClick={(e) => e.stopPropagation()} />
-      <p>{image.name}</p>
+    <div
+      className="lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${image.name} (${index + 1} dari ${count})`}
+      onClick={onClose}
+      onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
+      onTouchEnd={(e) => {
+        const dx = e.changedTouches[0].clientX - (touchX.current ?? e.changedTouches[0].clientX);
+        if (count > 1 && Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+        touchX.current = null;
+      }}
+    >
+      <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
+        {count > 1 && (
+          <button type="button" className="lightbox-nav prev" aria-label="Foto sebelumnya" onClick={() => go(-1)}>
+            <ChevronLeft size={28} />
+          </button>
+        )}
+        <img src={image.url} alt={image.name} />
+        {count > 1 && (
+          <button type="button" className="lightbox-nav next" aria-label="Foto berikutnya" onClick={() => go(1)}>
+            <ChevronRight size={28} />
+          </button>
+        )}
+      </div>
+      <p onClick={(e) => e.stopPropagation()}>
+        {image.name}
+        {count > 1 && <span className="lightbox-count"> · {index + 1} / {count}</span>}
+      </p>
+      {count > 1 && (
+        <div className="lightbox-thumbs" onClick={(e) => e.stopPropagation()}>
+          {images.map((im, i) => (
+            <button key={im.url + i} type="button" className={i === index ? "active" : ""} aria-label={`Lihat ${im.name}`} aria-current={i === index} onClick={() => setIndex(i)}>
+              <img src={im.thumbUrl || im.url} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
       <button type="button" className="btn btn-on-green" onClick={onClose}>
         <X size={16} /> Tutup
       </button>
@@ -154,7 +202,8 @@ export function AttachmentStrip({ attachments }) {
 
 // Lampiran di detail: foto bisa diperbesar, PDF dibuka di tab baru.
 export function AttachmentList({ task }) {
-  const [zoom, setZoom] = useState(null);
+  const [zoom, setZoom] = useState(null); // indeks foto yang dibuka
+  const photos = task.attachments.filter((a) => a.type !== "pdf" && a.url);
   if (!task.attachments.length) {
     return <p className="empty-box">{task.attachmentsDeletedAt ? "Lampiran sudah dihapus otomatis setelah task selesai." : "Tidak ada lampiran."}</p>;
   }
@@ -167,13 +216,13 @@ export function AttachmentList({ task }) {
             <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
           </a>
         ) : (
-          <button key={a.id} type="button" className="file-tile" onClick={() => setZoom(a)} aria-label={`Perbesar ${a.name}`}>
+          <button key={a.id} type="button" className="file-tile" onClick={() => a.url && setZoom(photos.indexOf(a))} aria-label={`Perbesar ${a.name}`}>
             <span className="thumb">{a.thumbUrl || a.url ? <img src={a.thumbUrl || a.url} alt="" loading="lazy" /> : "JPG"}</span>
             <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
           </button>
         )
       )}
-      {zoom && <Lightbox image={zoom} onClose={() => setZoom(null)} />}
+      {zoom !== null && zoom >= 0 && <Lightbox images={photos} index={zoom} onClose={() => setZoom(null)} />}
     </div>
   );
 }

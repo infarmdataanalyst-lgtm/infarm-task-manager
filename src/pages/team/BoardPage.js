@@ -1,8 +1,8 @@
 // /tim dan /tim/task/:id — board Kanban: Request → On Progress → Delay → Finish.
 // Kartu bisa digeser maju/mundur (desktop) atau lewat "Pindah ke…" (desktop & HP).
 
-import React, { useCallback, useMemo, useState } from "react";
-import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
 import { involves } from "../../data/taskModel";
@@ -27,7 +27,9 @@ function matchesDue(task, due) {
 const canDrag = () => typeof window !== "undefined" && window.matchMedia("(min-width: 721px) and (pointer: fine)").matches;
 
 export default function BoardPage() {
-  const { tasks, showToast, query, member, designers, colorOf } = useOutletContext();
+  const { tasks, showToast, query, member, designers, colorOf, isNew, markRead } = useOutletContext();
+  const location = useLocation();
+  const kanbanRef = useRef(null);
   const { id } = useParams();
   const navigate = useNavigate();
   const [run, busy] = useAction(showToast);
@@ -43,6 +45,19 @@ export default function BoardPage() {
   const draggable = useMemo(canDrag, []);
 
   const selected = id ? tasks.find((t) => t.id === id) : null;
+
+  // Membuka detail = akun ini sudah melihat task tersebut (badge "Baru" hilang untuk akun ini saja).
+  useEffect(() => {
+    if (selected) markRead(selected.id);
+  }, [selected, markRead]);
+
+  // Dari banner "Lihat": tampilkan kolom Request.
+  const focusAt = location.state?.focus === "request" ? location.state.at : null;
+  useEffect(() => {
+    if (!focusAt) return;
+    setActiveCol("request");
+    kanbanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusAt]);
   const closeDetail = useCallback(() => navigate("/tim"), [navigate]);
   const isDesigner = member.role === "designer";
 
@@ -148,7 +163,7 @@ export default function BoardPage() {
         ))}
       </nav>
 
-      <section aria-label="Kanban" className="kanban">
+      <section aria-label="Kanban" className="kanban" ref={kanbanRef}>
         {columns.map((c) => (
           <div
             key={c.status}
@@ -176,6 +191,7 @@ export default function BoardPage() {
                 <TaskCard
                   key={t.id}
                   task={t}
+                  isNew={isNew(t)}
                   now={now}
                   designers={designers}
                   colorOf={colorOf}

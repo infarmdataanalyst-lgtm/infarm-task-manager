@@ -33,6 +33,10 @@ export const restoreTask = (id) => store.updateTask(id, { deletedAt: null });
 
 export const listHistory = (id) => store.listHistory(id);
 
+// Penanda "sudah dilihat" per akun: badge "Baru" hilang setelah detail task dibuka akun itu.
+export const listReads = (email) => store.listReads(email);
+export const markRead = (id, email) => store.markRead(id, email);
+
 // ─── Checklist: tiap item bisa dikerjakan desainer berbeda ──────
 // Setiap aksi hanya mengubah satu item, jadi centangan Denny dan Arum tidak saling menimpa.
 

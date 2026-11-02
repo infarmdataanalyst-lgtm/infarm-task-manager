@@ -14,7 +14,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 - Mockup UI/UX (acuan tampilan): https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu
 
 > **Status:** spesifikasi di bawah adalah **v8** (disepakati dengan pemilik proyek, 30 Oktober 2026).
-> Dikerjakan bertahap, lihat "Tahapan v8". **Tahap 1 sudah di kode**; tahap 2–3 belum.
+> Dikerjakan bertahap, lihat "Tahapan v8". **Tahap 1 + notifikasi request baru sudah di kode**; sisanya belum.
 
 ## Peran dan akses
 
@@ -33,11 +33,13 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 1. **Form request** (`/`): nama, divisi, judul, kategori, deadline, brief (task secara keseluruhan), link referensi, dan **lampiran maks 5 file**:
    - Gambar JPG/PNG/WEBP: dikompres otomatis (maks 1600px) + dibuatkan **thumbnail kecil** (±320px) untuk kartu, supaya board tidak memboroskan kuota transfer.
    - PDF: maks **5 MB** per file, tampil sebagai ikon + nama file.
-   - Setelah terkirim: halaman "Request sudah masuk" (ringkasan isian dari form). Tidak ada link ke progres.
+   - Setelah terkirim: halaman "Request sudah masuk" (ringkasan isian dari form + pratinjau foto yang bisa diperbesar dan digeser, PDF bisa dibuka; diambil dari file di perangkat requester, bukan diunduh ulang). Tidak ada link ke progres.
 2. **Notifikasi request baru** (di dalam web, **tanpa lonceng**):
    - **Banner hijau tetap** di atas board: "2 request baru masuk · Lihat". Tidak hilang sendiri sampai diklik.
    - **Kartu baru disorot**: badge "Baru" + garis tepi berkedip halus sampai detailnya dibuka.
    - Status "sudah dilihat" dicatat **per akun** (Denny melihat tidak menghilangkan tanda untuk Arum).
+   - "Baru" = task di kolom Request yang belum pernah dibuka akun itu (`task_reads`). Banner menampilkan yang masuk setelah "Lihat" terakhir diklik (waktu klik disimpan per akun di localStorage `infarm_banner_seen_<email>`).
+   - Board mengambil ulang data tiap 60 detik selama tab terlihat, sebagai cadangan bila Realtime terputus.
 3. **Kolom Kanban: Request → On Progress → Delay → Finish** (tidak ada Todo).
    - **Request:** kartu punya tombol nama desainer langsung (**Arum** / **Denny**). Klik = jadi PIC + pindah ke On Progress + waktu kerja mulai. PIC tidak ditentukan dari siapa yang login.
    - **On Progress:** sedang dikerjakan; waktu kerja berjalan.
@@ -60,6 +62,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 8. **Detail task = pop-up mengambang** di tengah layar (HP: layar penuh), dibuka dengan klik kartu.
    - Kanan atas: ikon **hijau Edit**, **merah Hapus** (dengan konfirmasi), **abu-abu Tutup**.
    - Isi: info request, lampiran, link referensi, checklist per orang, link hasil, waktu kerja, riwayat task, aksi pindah kolom.
+   - Pratinjau foto (lightbox) bisa digeser antar foto: tombol kiri/kanan, panah keyboard, geser jari di HP, thumbnail di bawah, penghitung "2 / 4". Escape menutup pratinjau saja, pop-up detail tetap terbuka.
    - Hanya tim desain/admin yang bisa mengedit isi request.
 9. **Hapus = arsip** (soft delete). Task hilang dari board, tetap ada di database beserta riwayatnya; admin bisa memulihkan.
 10. **Audit / riwayat perubahan:** semua perubahan dicatat otomatis oleh database beserta **akun Google pelakunya**: dibuat, edit field, pindah kolom, ganti PIC, checklist, lampiran, link hasil, hapus/pulihkan, dan penghapusan lampiran otomatis (pelaku "sistem"). Riwayat tidak bisa diubah atau dihapus siapa pun. Tampil di detail task; halaman audit lengkap untuk admin.
@@ -149,7 +152,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 ## Aturan tata letak UI (v8, acuan: mockup)
 
 1. **Header hijau** (gradasi hijau Infarm): logo + judul kiri.
-   - Tim: **search bar judul** di tengah; kanan: Salin link form · Export CSV · avatar akun (menu: nama, email, Keluar). HP: ikon cari + avatar; Salin link form dan Export CSV pindah ke menu akun.
+   - Tim: **search bar judul** di tengah; kanan: Salin & buka form (menyalin link form sekaligus membukanya di tab baru) · Export CSV · avatar akun (menu: nama, email, Keluar). HP: ikon cari + avatar; Salin link form dan Export CSV pindah ke menu akun.
    - Form request: hanya logo + judul, tanpa tombol.
 2. **Banner request baru** tepat di bawah header (hanya bila ada yang belum dilihat akun ini).
 3. **Urutan halaman tim:**
@@ -179,7 +182,8 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 
 - **Tahap 1 (sudah):** skema v8 + RLS + trigger, login Google + `team_members`, form `/` foto + PDF maks 5 + thumbnail, board 4 kolom (urut deadline), geser kartu + "Pindah ke…", tombol Arum/Denny di kartu Request, pop-up detail (Edit/Hapus/Tutup), checklist per orang, waktu kerja jam kerja, riwayat di detail, hapus = arsip, pencarian judul, filter Tugas saya/PIC/deadline, menu bawah HP.
 - **Tahap 2:** analitik per orang + pembanding minggu/bulan lalu, halaman Audit (admin, termasuk pulihkan task terhapus), halaman Anggota (admin), edit lampiran oleh tim.
-- **Tahap 3:** banner + kartu "Baru" per akun (`task_reads`), penghapusan lampiran otomatis 7 hari setelah Finish, (opsional) halaman `/privasi` untuk Publish di Google.
+- **Sudah ditarik dari tahap 3:** banner + kartu "Baru" per akun (`task_reads`).
+- **Tahap 3:** penghapusan lampiran otomatis 7 hari setelah Finish, (opsional) halaman `/privasi` untuk Publish di Google.
 
 ## Dari v7 ke v8 (ringkasan perubahan)
 
@@ -221,6 +225,7 @@ src/data/
   taskModel.js             normalizeTask, fromRow/toRow, applyTransition, taskChanges/historyAction (padanan SQL), helpers, involves
   taskActions.js           aksi alur kerja (submitRequest, takeTask, moveTask, changePic, editTask, deleteTask, checklist, ...)
   useTasks.js              hook React: daftar task yang ikut berubah otomatis
+  useReads.js              hook React: penanda "sudah dilihat" per akun → isNew(task), markRead(id)
 src/lib/
   worktime.js              waktu kerja jam kerja Sen–Jum 08–17 WIB (padanan work_minutes() di SQL), fmtDuration
   dates.js                 tanggal, overdue, tepat waktu, rentang periode analitik
@@ -229,11 +234,11 @@ src/lib/
   csv.js                   export CSV (RFC 4180 + BOM untuk Excel)
   changes.js               teks riwayat (aksi + perubahan field)
 src/components/
-  ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Modal, Lightbox, AttachmentStrip/List, LinkList, useToast, useAction, useNow
+  ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Modal, Lightbox (galeri, bisa digeser), AttachmentStrip/List, LinkList, useToast, useAction, useNow
   ReferenceEditor.js       input lampiran (foto + PDF, maks 5) + link referensi di form
 src/pages/
   RequestPage.js           "/" form request + "Request sudah masuk"
-  team/TeamLayout.js       "/tim/*" login Google, header (cari, salin link, export, akun), tab / menu bawah HP
+  team/TeamLayout.js       "/tim/*" login Google, header (cari, salin & buka form, export, akun), banner request baru, tab / menu bawah HP
   team/BoardPage.js        Kanban 4 kolom, chip angka, filter, geser kartu
   team/TaskCard.js         kartu Kanban
   team/MoveDialog.js       "Pindah ke…": PIC (dari Request), alasan Delay, link hasil Finish
@@ -255,7 +260,7 @@ src/pages/
 ## Integrasi Supabase
 
 - Requester (`anon`): hanya `INSERT` request bersih (tanpa membaca balik; konfirmasi memakai isian form) dan upload ke Storage `references`.
-- Anggota aktif (`authenticated`, email ∈ `team_members`): `SELECT/UPDATE` task, kelola `task_checklist`, baca `work_sessions`, `task_history`, `team_members`. Tidak ada `DELETE` task (hapus = `deleted_at`).
+- Anggota aktif (`authenticated`, email ∈ `team_members`): `SELECT/UPDATE` task, kelola `task_checklist`, baca `work_sessions`, `task_history`, `team_members`, baca/tambah `task_reads` miliknya sendiri. Tidak ada `DELETE` task (hapus = `deleted_at`).
 - Admin: + kelola `team_members`, ubah/pulihkan task terarsip.
 - `task_history` dan `work_sessions` hanya ditulis trigger (`security definer`); tidak ada izin tulis untuk siapa pun.
 - Setelah update, aplikasi membaca ulang task (sesi kerja dibuat trigger setelah update, tidak ikut terbaca di permintaan yang sama).

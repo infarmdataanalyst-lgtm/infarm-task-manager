@@ -59,6 +59,8 @@ function scheduleRefetch() {
   refetchTimer = setTimeout(() => fetchAll().then(notify).catch(() => {}), 300);
 }
 
+const POLL_MS = 60000;
+
 function ensureRealtime() {
   if (channel) return;
   channel = db()
@@ -66,6 +68,10 @@ function ensureRealtime() {
     .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, scheduleRefetch)
     .on("postgres_changes", { event: "*", schema: "public", table: "task_checklist" }, scheduleRefetch)
     .subscribe();
+  // Cadangan bila Realtime terputus: ambil ulang tiap 60 detik selama tab terlihat dan ada yang memakai data.
+  setInterval(() => {
+    if (listeners.size && document.visibilityState === "visible") fetchAll().then(notify).catch(() => {});
+  }, POLL_MS);
 }
 
 // Setelah login/keluar: buang cache dan ambil ulang dengan hak akses yang baru.
@@ -161,6 +167,17 @@ export async function updateTask(id, patch) {
     await removeFiles(attachmentPaths(current.attachments).filter((p) => !kept.has(p)));
   }
   return updated;
+}
+
+// ─── Penanda "sudah dilihat" per akun (badge Baru) ──────────────
+
+export async function listReads(email) {
+  const rows = must(await db().from("task_reads").select("task_id").eq("member_email", email));
+  return rows.map((r) => r.task_id);
+}
+
+export async function markRead(taskId, email) {
+  must(await db().from("task_reads").upsert({ task_id: taskId, member_email: email }, { onConflict: "task_id,member_email", ignoreDuplicates: true }));
 }
 
 export async function listHistory(taskId) {

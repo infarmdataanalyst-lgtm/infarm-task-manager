@@ -12,7 +12,7 @@ import { displayUrl } from "../../lib/links";
 import { fmtDuration, isTimerRunning, taskWorkMinutes } from "../../lib/worktime";
 import { AttachmentStrip, Avatar } from "../../components/ui";
 
-export default function TaskCard({ task: t, now, designers, colorOf, busy, draggable, onTake, onMove, onDragStart, onDragEnd, dragging }) {
+export default function TaskCard({ task: t, isNew, now, designers, colorOf, busy, draggable, onTake, onMove, onDragStart, onDragEnd, dragging }) {
   const navigate = useNavigate();
   const late = isOverdue(t);
   const done = t.checklist.filter((c) => c.done).length;
@@ -27,7 +27,7 @@ export default function TaskCard({ task: t, now, designers, colorOf, busy, dragg
 
   return (
     <article
-      className={`task-card ${dragging ? "dragging" : ""}`}
+      className={`task-card ${dragging ? "dragging" : ""} ${isNew ? "is-new" : ""}`}
       draggable={draggable}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", t.id);
@@ -38,6 +38,7 @@ export default function TaskCard({ task: t, now, designers, colorOf, busy, dragg
       onClick={open}
     >
       <div className="card-top">
+        {isNew && <span className="badge badge-new">Baru</span>}
         {late && <span className="badge badge-late">Terlambat {daysLate(t)} hari</span>}
         <span className="tag tag-category">{t.category}</span>
         <span className={`tag tag-due ${late ? "late" : ""}`}>

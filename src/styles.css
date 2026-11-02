@@ -102,6 +102,11 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .account-btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 4px; border-radius: 9999px; border: 0; background: rgb(0 0 0 / 0.18); color: #fff; font-weight: 600; }
 .account-btn .avatar { border: 2px solid #fff; }
 
+.new-banner { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--brand-primary); color: #fff; box-shadow: 0 6px 16px rgb(0 132 59 / 0.28); }
+.new-banner .icon { width: 32px; height: 32px; border-radius: 9999px; background: rgb(255 255 255 / 0.18); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.new-banner strong { font-family: var(--font-heading); font-size: 14px; }
+.new-banner .hide-mobile { color: var(--brand-pale); }
+.new-banner .btn { background: #fff; color: var(--brand-primary); font-weight: 700; flex-shrink: 0; }
 .local-banner { background: var(--orange-50); color: var(--orange-700); border: 1px solid oklch(90.1% 0.076 70.697); border-radius: 10px; padding: 8px 12px; font-size: 12px; }
 
 /* ─── Tombol ─────────────────────────────────────────────── */
@@ -301,8 +306,18 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .menu-item:hover { background: var(--zinc-100); color: var(--text); }
 
 .lightbox { position: fixed; inset: 0; z-index: 70; background: rgb(0 0 0 / 0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 10px; }
-.lightbox img { max-width: 100%; max-height: calc(100vh - 120px); border-radius: 12px; }
-.lightbox p { color: #fff; }
+.lightbox-stage { position: relative; display: flex; align-items: center; justify-content: center; width: min(100%, 1200px); min-height: 120px; padding: 0 64px; }
+.lightbox-stage img { max-width: min(100%, 1200px); max-height: calc(100vh - 200px); border-radius: 12px; display: block; }
+.lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 9999px; border: 0; background: rgb(255 255 255 / 0.9); color: var(--text); display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg); }
+.lightbox-nav:hover { background: #fff; }
+.lightbox-nav.prev { left: 0; }
+.lightbox-nav.next { right: 0; }
+.lightbox p { color: #fff; text-align: center; }
+.lightbox-count { color: rgb(255 255 255 / 0.75); }
+.lightbox-thumbs { display: flex; gap: 6px; max-width: 100%; overflow-x: auto; padding: 2px; }
+.lightbox-thumbs button { width: 52px; height: 52px; padding: 0; border-radius: 8px; border: 2px solid transparent; overflow: hidden; background: #222; flex-shrink: 0; opacity: 0.6; }
+.lightbox-thumbs button.active { border-color: #fff; opacity: 1; }
+.lightbox-thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 80; background: var(--text); color: #fff; padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow-lg); max-width: min(560px, calc(100% - 32px)); display: flex; gap: 12px; align-items: center; }
 .toast-error { background: var(--rose-700); }
@@ -400,6 +415,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .grid-2 { grid-template-columns: 1fr; }
   .grid-2.keep { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sent-actions .btn { flex: 1 1 100%; }
+  .lightbox { padding: 16px 8px; }
+  .lightbox-stage { padding: 0 52px; }
+  .lightbox-nav { width: 44px; height: 44px; }
   .bottom-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: #fff; border-top: 1px solid #d6ecd6; padding: 8px 4px calc(10px + env(safe-area-inset-bottom)); }
   .bottom-nav a, .bottom-nav button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-decoration: none; background: none; border: 0; min-height: 44px; justify-content: center; }
   .bottom-nav .active { color: var(--brand-primary); font-weight: 700; }

@@ -19,3 +19,5 @@ export const listHistory = (...a) => impl.listHistory(...a);
 export const addChecklistItem = (...a) => impl.addChecklistItem(...a);
 export const updateChecklistItem = (...a) => impl.updateChecklistItem(...a);
 export const removeChecklistItem = (...a) => impl.removeChecklistItem(...a);
+export const listReads = (...a) => impl.listReads(...a);
+export const markRead = (...a) => impl.markRead(...a);

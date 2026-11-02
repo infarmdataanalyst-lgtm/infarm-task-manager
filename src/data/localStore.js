@@ -10,7 +10,8 @@ import { localMember } from "./auth";
 import { applyTransition, arr, historyAction, normalizeChecklistItem, normalizeTask, taskChanges } from "./taskModel";
 
 const KEY = "infarm_tasks_v8";
-const HISTORY_KEY = "infarm_task_history_v8"; // { [taskId]: [{id, createdAt, actorName, action, changes}] }
+const HISTORY_KEY = "infarm_task_history_v8";
+const READS_KEY = "infarm_task_reads_v8"; // { [email]: [taskId, ...] } // { [taskId]: [{id, createdAt, actorName, action, changes}] }
 const MAX_LOCAL_PDF = 1024 * 1024; // PDF lebih besar tidak disimpan isinya (localStorage terbatas ±5 MB)
 
 export class StorageFullError extends Error {
@@ -129,6 +130,16 @@ export async function createTask(input) {
 
 export async function updateTask(id, patch) {
   return patchTask(id, patch);
+}
+
+export async function listReads(email) {
+  return arr((readRaw(READS_KEY) || {})[email]);
+}
+
+export async function markRead(taskId, email) {
+  const all = readRaw(READS_KEY) || {};
+  all[email] = [...new Set([...arr(all[email]), taskId])];
+  save(READS_KEY, all);
 }
 
 export async function listHistory(taskId) {

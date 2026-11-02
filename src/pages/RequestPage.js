@@ -1,7 +1,7 @@
 // "/" — form request desain untuk divisi lain (tanpa login), lalu konfirmasi "Request sudah masuk".
 // Requester tidak bisa melihat board atau progres; konfirmasi menampilkan isian yang dikirim.
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Check, FileText, Info, Send } from "lucide-react";
 import { CATEGORIES, DIVISIONS } from "../config";
 import { submitRequest } from "../data/taskActions";
@@ -9,11 +9,20 @@ import { fmtDateTime, fmtDay, toYMD } from "../lib/dates";
 import { displayUrl, normalizeUrl } from "../lib/links";
 import { fmtBytes, newId } from "../lib/images";
 import ReferenceEditor from "../components/ReferenceEditor";
-import { AppHeader, LocalModeBanner, useAction, useToast } from "../components/ui";
+import { AppHeader, Lightbox, LocalModeBanner, useAction, useToast } from "../components/ui";
 
 const EMPTY = { requesterName: "", division: DIVISIONS[0], title: "", category: CATEGORIES[0], dueDate: "", description: "" };
 
-function SentPage({ sent, onAgain }) {
+// drafts = file yang dipilih di form (masih ada di perangkat ini), dipakai untuk pratinjau tanpa mengunduh ulang.
+function SentPage({ sent, drafts, onAgain }) {
+  const [zoom, setZoom] = useState(null);
+  const [files, setFiles] = useState([]);
+  useEffect(() => {
+    const list = drafts.map((a) => ({ ...a, url: URL.createObjectURL(a.blob), thumbUrl: a.previewUrl }));
+    setFiles(list);
+    return () => list.forEach((f) => URL.revokeObjectURL(f.url));
+  }, [drafts]);
+  const photos = files.filter((f) => f.type === "image");
   return (
     <main className="container container-form page">
       <div className="row" style={{ gap: 14, flexWrap: "nowrap" }}>
@@ -34,10 +43,22 @@ function SentPage({ sent, onAgain }) {
         <div className="stack" style={{ borderTop: "1px solid var(--zinc-100)", paddingTop: 10 }}>
           <p className="eyebrow">Lampiran dan link yang dikirim</p>
           {!sent.attachments.length && !sent.referenceLinks.length && <p className="muted">Tanpa lampiran dan link.</p>}
-          {sent.attachments.map((a) => (
-            <p key={a.id} className="row small" style={{ gap: 6 }}>
-              <FileText size={14} aria-hidden="true" /> {a.name} · {fmtBytes(a.size)}
-            </p>
+          {photos.length > 0 && (
+            <div className="file-grid">
+              {photos.map((f, i) => (
+                <button key={f.id} type="button" className="file-tile" onClick={() => setZoom(i)} aria-label={`Perbesar ${f.name}`}>
+                  <span className="thumb"><img src={f.thumbUrl || f.url} alt="" /></span>
+                  <span className="caption" style={{ display: "block" }}>{f.name} · {fmtBytes(f.size)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {files.filter((f) => f.type === "pdf").map((f) => (
+            <a key={f.id} className="link-row" href={f.url} target="_blank" rel="noopener noreferrer">
+              <FileText size={16} color="var(--rose-700)" aria-hidden="true" />
+              <span className="url">{f.name} · {fmtBytes(f.size)}</span>
+              <span className="small muted">Buka</span>
+            </a>
           ))}
           {sent.referenceLinks.map((l) => (
             <a key={l.id} className="small" href={l.url} target="_blank" rel="noopener noreferrer">{displayUrl(l.url)}</a>
@@ -51,6 +72,7 @@ function SentPage({ sent, onAgain }) {
       <div className="row sent-actions">
         <button type="button" className="btn btn-primary btn-cta" onClick={onAgain}>Kirim request lain</button>
       </div>
+      {zoom !== null && <Lightbox images={photos} index={zoom} onClose={() => setZoom(null)} />}
     </main>
   );
 }
@@ -102,7 +124,7 @@ export default function RequestPage() {
     <>
       <AppHeader title="Request desain" subtitle="Kirim kebutuhan desain ke Tim Desain infarm.id" narrow />
       {sent ? (
-        <SentPage sent={sent} onAgain={reset} />
+        <SentPage sent={sent} drafts={attachments} onAgain={reset} />
       ) : (
         <main className="container container-narrow page">
           <LocalModeBanner />
