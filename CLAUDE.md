@@ -57,6 +57,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - Dimulai saat **request masuk** dan berhenti saat **Finish**. Dicatat **per kolom**: berapa lama di Request (menunggu diambil), di On Progress (dikerjakan), dan di Delay, plus **total**.
    - Hanya **jam kerja Senin–Jumat 08.00–17.00 WIB** yang dihitung.
    - Revisi (Finish → kolom lain) membuka waktu lagi dan menambah ke total. Kembali ke Request menambah waktu Request.
+   - Format tampilan (`fmtDuration`): 1 hari = 9 jam kerja. "5 menit", "4 jam 25 menit", "1 hari" (tepat 9 jam), "1 hari 3 jam 25 menit" (lengkap, bagian 0 tidak ditulis). CSV tetap menit.
    - Kartu: total (berjalan, hijau bila belum Finish). Detail: rincian Di Request · Di On Progress · Di Delay · Total. Export CSV: keempat angka dalam menit.
    - Analitik "rata-rata pengerjaan" memakai waktu di On Progress. Task bersama: durasi dihitung untuk PIC **dan** setiap pengerja checklist.
    - Hari libur nasional belum diperhitungkan (bisa ditambah daftar libur nanti).
@@ -70,7 +71,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 10. **Audit / riwayat perubahan:** semua perubahan dicatat otomatis oleh database beserta **akun Google pelakunya**: dibuat, edit field, pindah kolom, ganti PIC, checklist, lampiran, link hasil, hapus/pulihkan, dan penghapusan lampiran otomatis (pelaku "sistem"). Riwayat tidak bisa diubah atau dihapus siapa pun. Tampil di detail task; halaman audit lengkap untuk admin.
 11. **Pencarian judul** di bagian paling atas board (search bar di header hijau).
 12. **Analitik per orang:** task selesai, persen tepat waktu, rata-rata waktu kerja per task (On Progress), rata-rata menunggu diambil (Request), jumlah masuk Delay. Bisa dibandingkan dengan **minggu lalu** atau **bulan lalu** (naik/turun ditampilkan, hijau = membaik, merah = memburuk).
-    - Periode: Minggu ini · Minggu lalu · Bulan ini · Bulan lalu (`lib/periods.js`). Periode berjalan dibandingkan dengan rentang yang sama panjang di periode sebelumnya (Sen–Rab minggu ini vs Sen–Rab minggu lalu); periode yang sudah lewat dibandingkan penuh dengan periode sebelumnya.
+    - Periode: **Minggu ini** · **Bulan ini** saja (`lib/periods.js`, diubah 2 Nov 2026). Selalu periode penuh vs periode penuh tepat sebelumnya: Minggu ini 2–8 Nov vs 26 Okt – 1 Nov; Bulan ini 1–30 Nov vs 1–31 Okt. Minggu = Senin–Minggu, bulan = kalender. Karena periode ini masih berjalan, tampil keterangan "periode masih berjalan, hari ke-n dari 7/30".
     - Grafik per orang: task selesai per hari (minggu) atau per minggu (bulan), batang periode ini vs pembanding.
 13. **Halaman Anggota (admin):** tambah Gmail + nama + peran + warna; ubah peran/warna; nonaktifkan (langsung tidak bisa masuk); hapus hanya untuk anggota nonaktif. Akun sendiri tidak bisa diturunkan/dinonaktifkan dari UI, dan database menolak bila tidak tersisa admin aktif (`team_members_admin_guard`, pesan `admin_terakhir`). Nama tidak bisa diubah (dipakai sebagai PIC).
 14. **Edit lampiran oleh tim:** di pop-up detail ("Tambah lampiran", ikon hapus per file dengan konfirmasi). Batas tetap 5 file; file dihapus juga dari Storage; tercatat di riwayat.

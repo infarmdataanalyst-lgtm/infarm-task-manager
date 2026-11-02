@@ -42,10 +42,16 @@ export const taskWorkMinutes = (task, now = new Date()) => stageMinutes(task, no
 
 export const isTimerRunning = (task) => task.workSessions.some((w) => !w.endedAt);
 
-// "20 jam 15 menit", "45 menit", "0 menit".
+// 1 hari = 9 jam kerja (08.00–17.00). Mis. "45 menit", "4 jam 25 menit", "1 hari", "1 hari 3 jam 25 menit".
+export const WORKDAY_MINUTES = 9 * 60;
 export function fmtDuration(minutes) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (!h) return `${m} menit`;
-  return m ? `${h} jam ${m} menit` : `${h} jam`;
+  const total = Math.max(0, Math.floor(minutes || 0));
+  const d = Math.floor(total / WORKDAY_MINUTES);
+  const h = Math.floor((total % WORKDAY_MINUTES) / 60);
+  const m = total % 60;
+  const parts = [];
+  if (d) parts.push(`${d} hari`);
+  if (h) parts.push(`${h} jam`);
+  if (m || !parts.length) parts.push(`${m} menit`);
+  return parts.join(" ");
 }

@@ -121,7 +121,9 @@ export default function AnalyticsPage() {
             <button key={p.key} type="button" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>{p.label}</button>
           ))}
         </div>
-        <span className="small muted">{rangeLabel(cmp.current)} dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel})</span>
+        <span className="small muted">
+          {rangeLabel(cmp.current)} dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel}) · periode masih berjalan, hari ke-{cmp.progress.day} dari {cmp.progress.days}
+        </span>
       </div>
 
       <section aria-label="Ringkasan tim" className="stats">
@@ -186,8 +188,8 @@ export default function AnalyticsPage() {
         ))}
       </section>
       <p className="hint">
-        Task yang dikerjakan bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu hanya jam kerja Senin–Jumat 08.00–17.00.
-        "Menunggu diambil" = waktu di kolom Request untuk task yang diambil orang itu. Periode yang sedang berjalan dibandingkan dengan rentang yang sama panjang di periode sebelumnya.
+        Task yang dikerjakan bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu hanya jam kerja Senin–Jumat 08.00–17.00 (1 hari = 9 jam kerja).
+        "Menunggu diambil" = waktu di kolom Request untuk task yang diambil orang itu. Periode ini dibandingkan dengan periode penuh sebelumnya; selama periode ini belum selesai, angkanya masih bisa bertambah.
       </p>
     </>
   );
