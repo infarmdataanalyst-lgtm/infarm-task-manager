@@ -21,3 +21,6 @@ export const updateChecklistItem = (...a) => impl.updateChecklistItem(...a);
 export const removeChecklistItem = (...a) => impl.removeChecklistItem(...a);
 export const listReads = (...a) => impl.listReads(...a);
 export const markRead = (...a) => impl.markRead(...a);
+export const listAllHistory = (...a) => impl.listAllHistory(...a);
+export const addAttachments = (...a) => impl.addAttachments(...a);
+export const removeAttachment = (...a) => impl.removeAttachment(...a);

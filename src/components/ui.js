@@ -98,14 +98,20 @@ export function useNow(intervalMs = 60000) {
   return now;
 }
 
+// Tumpukan pop-up yang terbuka: Escape hanya menutup yang paling atas.
+const modalStack = [];
+
 export function Modal({ labelledBy, onClose, className = "", children }) {
   useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose();
+    const token = {};
+    modalStack.push(token);
+    const onKey = (e) => e.key === "Escape" && modalStack[modalStack.length - 1] === token && onClose();
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
+      modalStack.splice(modalStack.indexOf(token), 1);
       document.body.style.overflow = prev;
     };
   }, [onClose]);
@@ -201,7 +207,8 @@ export function AttachmentStrip({ attachments }) {
 }
 
 // Lampiran di detail: foto bisa diperbesar, PDF dibuka di tab baru.
-export function AttachmentList({ task }) {
+// onRemove (opsional): tampilkan tombol hapus di setiap lampiran (tim desain di pop-up detail).
+export function AttachmentList({ task, onRemove }) {
   const [zoom, setZoom] = useState(null); // indeks foto yang dibuka
   const photos = task.attachments.filter((a) => a.type !== "pdf" && a.url);
   if (!task.attachments.length) {
@@ -209,19 +216,26 @@ export function AttachmentList({ task }) {
   }
   return (
     <div className="file-grid">
-      {task.attachments.map((a) =>
-        a.type === "pdf" ? (
-          <a key={a.id} className="file-tile pdf" href={a.url || undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!a.url}>
-            <span className="thumb"><FileText size={24} aria-hidden="true" /></span>
-            <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
-          </a>
-        ) : (
-          <button key={a.id} type="button" className="file-tile" onClick={() => a.url && setZoom(photos.indexOf(a))} aria-label={`Perbesar ${a.name}`}>
-            <span className="thumb">{a.thumbUrl || a.url ? <img src={a.thumbUrl || a.url} alt="" loading="lazy" /> : "JPG"}</span>
-            <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
-          </button>
-        )
-      )}
+      {task.attachments.map((a) => (
+        <div key={a.id} className="file-tile-wrap">
+          {a.type === "pdf" ? (
+            <a className="file-tile pdf" href={a.url || undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!a.url}>
+              <span className="thumb"><FileText size={24} aria-hidden="true" /></span>
+              <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
+            </a>
+          ) : (
+            <button type="button" className="file-tile" onClick={() => a.url && setZoom(photos.indexOf(a))} aria-label={`Perbesar ${a.name}`}>
+              <span className="thumb">{a.thumbUrl || a.url ? <img src={a.thumbUrl || a.url} alt="" loading="lazy" /> : "JPG"}</span>
+              <span className="caption" style={{ display: "block" }}>{a.name}{a.size ? ` · ${fmtBytes(a.size)}` : ""}</span>
+            </button>
+          )}
+          {onRemove && (
+            <button type="button" className="remove" aria-label={`Hapus lampiran ${a.name}`} onClick={() => onRemove(a)}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      ))}
       {zoom !== null && zoom >= 0 && <Lightbox images={photos} index={zoom} onClose={() => setZoom(null)} />}
     </div>
   );

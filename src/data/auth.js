@@ -1,10 +1,11 @@
 // Login tim desain.
 // - Mode Supabase: login Google (Supabase Auth). Yang boleh masuk hanya email aktif di tabel team_members;
 //   database yang menegakkan ini (RLS), aplikasi hanya menampilkan pesan yang jelas.
-// - Mode uji coba: memilih akun tiruan dari LOCAL_MEMBERS (tanpa keamanan).
+// - Mode uji coba: memilih akun tiruan dari daftar anggota lokal (tanpa keamanan).
 
 import { useCallback, useEffect, useState } from "react";
-import { LOCAL_MEMBERS, STORAGE_MODE } from "../config";
+import { STORAGE_MODE } from "../config";
+import { listMembers, readLocalMembers } from "./members";
 import { db } from "./supabaseClient";
 
 const remote = STORAGE_MODE === "supabase";
@@ -24,7 +25,10 @@ const emit = () => listeners.forEach((fn) => fn());
 if (remote) db().auth.onAuthStateChange(() => setTimeout(emit, 0));
 
 // Akun yang sedang login (mode uji coba): dipakai localStore untuk nama pelaku di riwayat.
-export const localMember = () => LOCAL_MEMBERS.find((m) => m.email === readLocal()) || null;
+export const localMember = () => readLocalMembers().find((m) => m.email === readLocal() && m.active) || null;
+
+// Muat ulang status login + daftar anggota (mis. setelah admin mengubah anggota).
+export const refreshAuth = () => emit();
 
 async function resolve() {
   if (!remote) {
@@ -63,13 +67,6 @@ export async function signOut() {
     } catch {}
   }
   emit();
-}
-
-export async function listMembers() {
-  if (!remote) return LOCAL_MEMBERS;
-  const { data, error } = await db().from("team_members").select("*").order("name");
-  if (error) return [];
-  return data;
 }
 
 // Hook untuk /tim: { status: "loading" | "signedOut" | "denied" | "error" | "member", member, email, members }.

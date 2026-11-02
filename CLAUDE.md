@@ -14,7 +14,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 - Mockup UI/UX (acuan tampilan): https://claude.ai/artifact/X2yJtpb2ETevn9AR56V5nu
 
 > **Status:** spesifikasi di bawah adalah **v8** (disepakati dengan pemilik proyek, 30 Oktober 2026).
-> Dikerjakan bertahap, lihat "Tahapan v8". **Tahap 1 + notifikasi request baru sudah di kode**; sisanya belum.
+> Dikerjakan bertahap, lihat "Tahapan v8". **Tahap 1, tahap 2, dan notifikasi request baru sudah di kode**; sisanya (tahap 3) belum.
 
 ## Peran dan akses
 
@@ -69,7 +69,11 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 9. **Hapus = arsip** (soft delete). Task hilang dari board, tetap ada di database beserta riwayatnya; admin bisa memulihkan.
 10. **Audit / riwayat perubahan:** semua perubahan dicatat otomatis oleh database beserta **akun Google pelakunya**: dibuat, edit field, pindah kolom, ganti PIC, checklist, lampiran, link hasil, hapus/pulihkan, dan penghapusan lampiran otomatis (pelaku "sistem"). Riwayat tidak bisa diubah atau dihapus siapa pun. Tampil di detail task; halaman audit lengkap untuk admin.
 11. **Pencarian judul** di bagian paling atas board (search bar di header hijau).
-12. **Analitik per orang:** task selesai, persen tepat waktu, rata-rata waktu kerja per task, jumlah Delay. Bisa dibandingkan dengan **minggu lalu** atau **bulan lalu** (naik/turun ditampilkan).
+12. **Analitik per orang:** task selesai, persen tepat waktu, rata-rata waktu kerja per task (On Progress), rata-rata menunggu diambil (Request), jumlah masuk Delay. Bisa dibandingkan dengan **minggu lalu** atau **bulan lalu** (naik/turun ditampilkan, hijau = membaik, merah = memburuk).
+    - Periode: Minggu ini · Minggu lalu · Bulan ini · Bulan lalu (`lib/periods.js`). Periode berjalan dibandingkan dengan rentang yang sama panjang di periode sebelumnya (Sen–Rab minggu ini vs Sen–Rab minggu lalu); periode yang sudah lewat dibandingkan penuh dengan periode sebelumnya.
+    - Grafik per orang: task selesai per hari (minggu) atau per minggu (bulan), batang periode ini vs pembanding.
+13. **Halaman Anggota (admin):** tambah Gmail + nama + peran + warna; ubah peran/warna; nonaktifkan (langsung tidak bisa masuk); hapus hanya untuk anggota nonaktif. Akun sendiri tidak bisa diturunkan/dinonaktifkan dari UI, dan database menolak bila tidak tersisa admin aktif (`team_members_admin_guard`, pesan `admin_terakhir`). Nama tidak bisa diubah (dipakai sebagai PIC).
+14. **Edit lampiran oleh tim:** di pop-up detail ("Tambah lampiran", ikon hapus per file dengan konfirmasi). Batas tetap 5 file; file dihapus juga dari Storage; tercatat di riwayat.
 
 ## Struktur link (v8)
 
@@ -114,7 +118,7 @@ Environment variable (atur di Vercel → Settings → Environment Variables):
 
 Langkah menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md`.
 
-Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 foto + 1 PDF + link; banner dan badge "Baru" muncul di board; Ambil lewat tombol Arum/Denny; checklist dibagi dua orang; geser ke Delay (waktu berhenti) lalu kembali; Finish (wajib link); revisi dari Finish; cek riwayat dan audit; cek tampilan HP (lebar 390px).
+Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 foto + 1 PDF + link; banner dan badge "Baru" muncul di board; Ambil lewat tombol Arum/Denny; checklist dibagi dua orang; geser ke Delay (waktu berhenti) lalu kembali; Finish (wajib link); revisi dari Finish; cek riwayat dan audit; cek tampilan HP (lebar 390px). Tahap 2: tambah/nonaktifkan/hapus anggota; hapus task lalu pulihkan di Audit; tambah/hapus lampiran dari detail; analitik Minggu lalu vs 2 minggu lalu.
 
 ## Model data (v8)
 
@@ -141,7 +145,7 @@ Tabel Supabase v8:
 - `work_sessions`: `task_id`, `status` (kolom: request/on_progress/delay), `started_at`, `ended_at` (null = sedang berjalan). Request baru membuka sesi `request`; setiap pindah kolom menutup sesi lama dan membuka sesi kolom baru; Finish hanya menutup. Menit dihitung hanya jam kerja Senin–Jumat 08.00–17.00 WIB (`work_minutes()` di SQL = `workMinutesBetween()` di JS). `schema.sql` melengkapi data lama sekali (waktu Request = `created_at` sampai `started_at`).
 - `task_history`: audit, ditulis trigger database. `actor_email`, `actor_name` (requester: nama dari form; otomatis: "sistem"), `action`, `changes [{field, before, after}]`. Tidak ada izin UPDATE/DELETE untuk siapa pun.
 - `task_reads`: `task_id`, `member_email`, `read_at` (badge "Baru" per akun).
-- `team_members`: `email` (Gmail), `name`, `role: "designer" | "admin"`, `active`, `color`.
+- `team_members`: `email` (Gmail), `name`, `role: "designer" | "admin"`, `active`, `color`. Constraint trigger `team_members_admin_guard` (deferred): minimal satu admin aktif harus tersisa.
 - Storage bucket `references`: `<id task>/<file>` untuk foto, thumbnail, dan PDF (maks 5 MB, JPG/PNG/WEBP/PDF).
 
 Tidak ada migrasi v7 → v8: skema v7 tidak pernah dijalankan di database produksi (proyek Supabase dibuat baru untuk v8). `schema.sql` v8 ditulis untuk database baru dan aman dijalankan ulang.
@@ -173,6 +177,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 
 - Komponen tidak pernah memanggil Supabase/localStorage langsung: baca lewat `useTasks()`, ubah lewat fungsi di `taskActions.js`.
 - Kolom baru di task: tambah di `schema.sql` (tabel + `alter table ... add column if not exists`), `taskModel.js` (`normalizeTask`, `COLUMNS`), lalu UI. Audit ditulis oleh trigger, jadi kolom baru otomatis tercatat bila didaftarkan di fungsi pembanding riwayat.
+- `Modal` bertumpuk (mis. konfirmasi di atas detail): Escape hanya menutup modal paling atas.
 - Aksi dijalankan lewat `useAction(showToast)` → `run(() => aksi(...), "pesan sukses")`. Error otomatis jadi toast, dan data di layar tidak berubah.
 - `taskStore` memperbarui cache hanya SETELAH penulisan berhasil.
 - Desainer baru (v8): ditambah admin di halaman Anggota (tabel `team_members`), bukan di kode.
@@ -183,7 +188,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 ## Tahapan v8
 
 - **Tahap 1 (sudah):** skema v8 + RLS + trigger, login Google + `team_members`, form `/` foto + PDF maks 5 + thumbnail, board 4 kolom (urut deadline), geser kartu + "Pindah ke…", tombol Arum/Denny di kartu Request, pop-up detail (Edit/Hapus/Tutup), checklist per orang, waktu kerja jam kerja, riwayat di detail, hapus = arsip, pencarian judul, filter Tugas saya/PIC/deadline, menu bawah HP.
-- **Tahap 2:** analitik per orang + pembanding minggu/bulan lalu, halaman Audit (admin, termasuk pulihkan task terhapus), halaman Anggota (admin), edit lampiran oleh tim.
+- **Tahap 2 (sudah):** analitik per orang + pembanding minggu/bulan lalu, halaman Audit (admin, termasuk pulihkan task terhapus), halaman Anggota (admin), edit lampiran oleh tim.
 - **Sudah ditarik dari tahap 3:** banner + kartu "Baru" per akun (`task_reads`).
 - **Tahap 3:** penghapusan lampiran otomatis 7 hari setelah Finish, (opsional) halaman `/privasi` untuk Publish di Google.
 
@@ -221,7 +226,8 @@ supabase/reset-anggota.sql ganti SEMUA anggota (mis. akun uji coba → akun asli
 docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Google + Vercel
 src/data/
   supabaseClient.js        satu klien Supabase (sesi login disimpan & diperbarui otomatis)
-  auth.js                  login Google / akun tiruan, cek anggota (my_membership), daftar anggota, useAuth()
+  auth.js                  login Google / akun tiruan, cek anggota (my_membership), useAuth(), refreshAuth()
+  members.js               kelola team_members (list/add/update/remove; mode uji coba: localStorage infarm_members_v8)
   taskStore.js             pintu masuk data: memilih supabaseStore atau localStore sesuai STORAGE_MODE
   supabaseStore.js         Supabase: insert request (anon), baca/ubah (anggota), lampiran Storage, checklist, riwayat, Realtime
   localStore.js            localStorage (mode uji coba): meniru aturan trigger, sesi kerja, riwayat
@@ -231,7 +237,8 @@ src/data/
   useReads.js              hook React: penanda "sudah dilihat" per akun → isNew(task), markRead(id)
 src/lib/
   worktime.js              jam kerja Sen–Jum 08–17 WIB (padanan work_minutes() di SQL), stageMinutes (per kolom + total), fmtDuration
-  dates.js                 tanggal, overdue, tepat waktu, rentang periode analitik
+  dates.js                 tanggal, overdue, tepat waktu
+  periods.js               periode analitik + pembanding (minggu/bulan lalu), kelompok grafik
   images.js                lampiran: kompres foto + thumbnail, cek PDF ≤5 MB, fmtBytes, newId
   links.js                 normalizeUrl, displayUrl
   csv.js                   export CSV (RFC 4180 + BOM untuk Excel)
@@ -246,7 +253,9 @@ src/pages/
   team/TaskCard.js         kartu Kanban
   team/MoveDialog.js       "Pindah ke…": PIC (dari Request), alasan Delay, link hasil Finish
   team/TaskDetail.js       pop-up detail: edit, hapus (arsip), checklist per orang, link hasil, riwayat
-  team/AnalyticsPage.js    "/tim/analitik" (versi sementara; tahap 2 ditulis ulang)
+  team/AnalyticsPage.js    "/tim/analitik": ringkasan tim + kartu per orang dengan selisih periode sebelumnya + grafik
+  team/AuditPage.js        "/tim/audit" (admin): semua perubahan (filter judul/pelaku/aksi/rentang, tanda perubahan mencurigakan) + task terhapus (Pulihkan)
+  team/MembersPage.js      "/tim/anggota" (admin): kelola anggota
 ```
 
 ## Masalah yang diketahui
@@ -259,6 +268,8 @@ src/pages/
 - **Bucket `references` publik**: file bisa dibuka siapa pun yang tahu URL-nya (nama file UUID, tidak bisa ditebak; tidak bisa di-list oleh requester).
 - **Upload lampiran oleh requester** belum diuji di Supabase sungguhan (hanya di tiruan); cek pertama kali di preview.
 - **Libur nasional** belum dikecualikan dari waktu kerja.
+- **Halaman Audit menampilkan 500 perubahan terbaru** (filter berjalan di browser). Tambahkan paginasi/filter di server bila riwayat sudah sangat banyak.
+- **Menghapus anggota tidak mengubah task-nya:** `tasks.pic` dan `assignee` checklist menyimpan nama, jadi task milik anggota yang dihapus tetap ada dengan nama lama (avatar abu-abu). Ganti PIC lewat detail task. Lebih aman menonaktifkan daripada menghapus.
 - **Data uji coba sebelum 2 Nov 2026**: waktu di Delay dari sebelum perubahan ini tidak tercatat (dulu hanya On Progress yang dicatat).
 - **Pop-up di HP** memakai tinggi layar yang terlihat (100% dari `.modal-wrap` / `dvh`), bukan `100vh`: di browser HP `100vh` lebih tinggi dari layar sehingga tombol Tutup terdorong ke balik bilah alamat.
 

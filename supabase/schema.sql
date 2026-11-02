@@ -461,6 +461,27 @@ drop policy if exists "Anggota melihat daftar anggota" on public.team_members;
 create policy "Anggota melihat daftar anggota" on public.team_members
   for select to authenticated using (public.is_member());
 
+-- Selalu sisakan minimal satu admin aktif (dicek di akhir transaksi, jadi reset-anggota.sql tetap bisa
+-- menghapus semua lalu mengisi ulang dalam satu transaksi).
+create or replace function public.team_members_admin_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.team_members where role = 'admin' and active) then
+    raise exception 'admin_terakhir' using errcode = '23514';
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists team_members_admin_guard on public.team_members;
+create constraint trigger team_members_admin_guard after update or delete on public.team_members
+  deferrable initially deferred
+  for each row execute function public.team_members_admin_guard();
+
 drop policy if exists "Admin mengelola anggota" on public.team_members;
 create policy "Admin mengelola anggota" on public.team_members
   for all to authenticated using (public.is_admin()) with check (public.is_admin());

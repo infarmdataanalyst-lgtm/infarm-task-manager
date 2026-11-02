@@ -1,141 +1,181 @@
-// /tim/analitik — ringkasan kinerja per periode dan per desainer.
-// Tahap 2 v8: perbandingan per orang dengan minggu/bulan lalu (lihat mockup).
+// /tim/analitik — performa tim dan per orang, dibandingkan dengan periode sebelumnya.
+// Task bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu memakai jam kerja (lib/worktime.js).
 
 import React, { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { CATEGORIES, DIVISIONS } from "../../config";
-import { involves } from "../../data/taskModel";
-import { finishedOnTime, fmtShort, inRange, isOverdue, periodRange, toYMD } from "../../lib/dates";
-import { fmtDuration, taskWorkMinutes } from "../../lib/worktime";
+import { finishedOnTime } from "../../lib/dates";
+import { bucketLabels, bucketOf, comparePeriods, PERIODS, rangeLabel, within } from "../../lib/periods";
+import { fmtDuration, stageMinutes } from "../../lib/worktime";
 import { Avatar } from "../../components/ui";
 
-const PERIODS = [
-  ["last30", "30 hari terakhir"],
-  ["this_month", "Bulan ini"],
-  ["last_month", "Bulan lalu"],
-  ["custom", "Pilih tanggal"],
-];
+const involved = (t, name) => t.pic === name || t.checklist.some((c) => c.assignee === name);
+const avg = (list, fn) => (list.length ? Math.round(list.reduce((s, x) => s + fn(x), 0) / list.length) : null);
+const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : null);
 
-// Rata-rata waktu kerja (jam kerja) per task selesai.
-const avgWork = (list) => (list.length ? fmtDuration(Math.round(list.reduce((s, t) => s + taskWorkMinutes(t), 0) / list.length)) : "-");
+// Ukuran satu periode untuk sekumpulan task (seluruh tim, atau task yang melibatkan satu orang).
+function measure(tasks, range, takenBy) {
+  const finished = tasks.filter((t) => t.status === "finish" && within(t.finishedAt, range));
+  const taken = tasks.filter((t) => within(t.startedAt, range) && (!takenBy || t.pic === takenBy));
+  return {
+    received: tasks.filter((t) => within(t.createdAt, range)).length,
+    finished,
+    done: finished.length,
+    onTime: pct(finished.filter(finishedOnTime).length, finished.length),
+    work: avg(finished, (t) => stageMinutes(t).on_progress),
+    wait: avg(taken, (t) => stageMinutes(t).request),
+    delays: tasks.reduce((n, t) => n + t.workSessions.filter((w) => w.status === "delay" && within(w.startedAt, range)).length, 0),
+  };
+}
 
-const bars = (entries) => {
-  const max = Math.max(1, ...entries.map((e) => e[1]));
-  return entries.map(([label, value]) => ({ label, value, pct: `${Math.round((value / max) * 100)}%` }));
+// Teks dan warna selisih. better: "up" bila naik = membaik, "down" bila turun = membaik.
+function delta(cur, prev, { better, kind, prevLabel }) {
+  if (cur === null || prev === null) return { text: prev === null ? `belum ada data ${prevLabel}` : "-", tone: "flat" };
+  const diff = cur - prev;
+  if (diff === 0) return { text: `sama dengan ${prevLabel}`, tone: "flat" };
+  const good = better === "up" ? diff > 0 : diff < 0;
+  if (better === "flat") return { text: `${diff > 0 ? "+" : "−"}${Math.abs(diff)} dari ${prevLabel}`, tone: "flat" };
+  let text;
+  if (kind === "pct") text = `${diff > 0 ? "+" : "−"}${Math.abs(diff)} poin dari ${prevLabel}`;
+  else if (kind === "minutes") text = `${fmtDuration(Math.abs(diff))} ${diff < 0 ? "lebih cepat" : "lebih lama"} dari ${prevLabel}`;
+  else text = `${diff > 0 ? "+" : "−"}${Math.abs(diff)} dari ${prevLabel}`;
+  return { text, tone: good ? "good" : "bad" };
+}
+
+function Metric({ label, value, d }) {
+  return (
+    <div className="metric">
+      <dt>{label}</dt>
+      <dd className="value">{value}</dd>
+      <dd className={`delta ${d.tone}`}>{d.text}</dd>
+    </div>
+  );
+}
+
+function Bars({ cur, prev, labels, color, unitLabel }) {
+  const max = Math.max(1, ...cur, ...prev);
+  return (
+    <div className="mini-chart" role="img" aria-label={`Task selesai per ${unitLabel}: ${labels.map((l, i) => `${l} ${cur[i]} (sebelumnya ${prev[i]})`).join(", ")}`}>
+      {labels.map((l, i) => (
+        <div key={l} className="bar-col">
+          <div className="bars">
+            <span className="prev" style={{ height: `${(prev[i] / max) * 100}%` }} title={`Sebelumnya: ${prev[i]}`} />
+            <span className="cur" style={{ height: `${(cur[i] / max) * 100}%`, background: color }} title={`Periode ini: ${cur[i]}`} />
+          </div>
+          <span className="bar-label">{l}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const rows = (tasks, key, values) => {
+  const counts = values.map((v) => [v, tasks.filter((t) => t[key] === v).length]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...counts.map((c) => c[1]));
+  return counts.map(([label, value]) => ({ label, value, pct: `${Math.round((value / max) * 100)}%` }));
 };
 
 export default function AnalyticsPage() {
   const { tasks, designers } = useOutletContext();
-  const [period, setPeriod] = useState("last30");
-  const [custom, setCustom] = useState({ from: toYMD(new Date(Date.now() - 29 * 86400000)), to: toYMD(new Date()) });
+  const [period, setPeriod] = useState("this_week");
+  const cmp = useMemo(() => comparePeriods(period), [period]);
+  const labels = bucketLabels(cmp.unit);
+  const opts = { prevLabel: cmp.prevLabel };
 
-  const range = useMemo(() => periodRange(period, custom), [period, custom]);
+  const team = useMemo(() => ({ cur: measure(tasks, cmp.current), prev: measure(tasks, cmp.previous) }), [tasks, cmp]);
 
-  const data = useMemo(() => {
-    const received = tasks.filter((t) => inRange(t.createdAt, range));
-    const finished = tasks.filter((t) => t.status === "finish" && inRange(t.finishedAt, range));
-    const onTime = finished.filter(finishedOnTime).length;
-    const count = (key, values) => {
-      const counts = values.map((v) => [v, received.filter((t) => t[key] === v).length]);
-      return bars(counts.filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]));
-    };
-    return {
-      kpis: [
-        { label: "Request masuk", value: received.length, hint: `${tasks.filter((t) => t.status === "request").length} masih menunggu diambil` },
-        { label: "Task selesai", value: finished.length, hint: "semua dengan link hasil", color: "var(--brand-primary)" },
-        {
-          label: "Selesai tepat waktu",
-          value: finished.length ? `${onTime} dari ${finished.length}` : "-",
-          hint: finished.length ? `${Math.round((onTime / finished.length) * 100)}%` : "belum ada task selesai",
-          color: "var(--brand-primary)",
-        },
-        { label: "Rata-rata pengerjaan", value: avgWork(finished), hint: "waktu di On Progress per task (jam kerja)" },
-        { label: "Sedang terlambat", value: tasks.filter(isOverdue).length, hint: "task aktif lewat deadline (saat ini)", color: "var(--rose-700)" },
-      ],
-      // Task bersama dihitung untuk PIC dan setiap pengerja checklist.
-      pics: designers.map((d) => {
-        const mine = tasks.filter((t) => t.pic === d.name || t.checklist.some((c) => c.assignee === d.name));
-        const prog = mine.filter((t) => t.status === "on_progress" && involves(t, d.name)).length;
-        const delay = mine.filter((t) => t.status === "delay" && involves(t, d.name)).length;
-        const done = finished.filter((t) => mine.includes(t));
+  const people = useMemo(
+    () =>
+      designers.map((d) => {
+        const mine = tasks.filter((t) => involved(t, d.name));
+        const cur = measure(mine, cmp.current, d.name);
+        const prev = measure(mine, cmp.previous, d.name);
+        const series = (m, range) => {
+          const out = labels.map(() => 0);
+          m.finished.forEach((t) => {
+            const b = bucketOf(t.finishedAt, range, cmp.unit);
+            if (b >= 0 && b < out.length) out[b] += 1;
+          });
+          return out;
+        };
         return {
           ...d,
-          active: prog + delay,
-          note: `On Progress ${prog} · Delay ${delay}`,
-          stats: [
-            { label: "Selesai", value: done.length, color: "var(--brand-primary)" },
-            { label: "Tepat waktu", value: done.length ? `${done.filter(finishedOnTime).length}/${done.length}` : "-" },
-            { label: "Terlambat", value: mine.filter(isOverdue).length, color: mine.some(isOverdue) ? "var(--rose-700)" : undefined },
-            { label: "Rata-rata", value: avgWork(done) },
-          ],
+          cur,
+          prev,
+          shared: cur.finished.filter((t) => t.pic !== d.name || t.checklist.some((c) => c.assignee && c.assignee !== d.name)).length,
+          active: mine.filter((t) => t.status === "on_progress" || t.status === "delay").length,
+          curSeries: series(cur, cmp.current),
+          prevSeries: series(prev, cmp.previous),
         };
       }),
-      byCategory: count("category", CATEGORIES),
-      byDivision: count("division", DIVISIONS),
-    };
-  }, [tasks, range, designers]);
+    [tasks, designers, cmp, labels]
+  );
 
-  const maxActive = Math.max(1, ...data.pics.map((p) => p.active));
+  const received = tasks.filter((t) => within(t.createdAt, cmp.current));
 
   return (
     <>
-      <div className="row period-bar" style={{ gap: 8 }}>
-        <span className="small muted hide-mobile">Periode:</span>
-        <div className="pills scroll-row" role="group" aria-label="Periode">
-          {PERIODS.map(([key, label]) => (
-            <button key={key} type="button" className="pill" aria-pressed={period === key} onClick={() => setPeriod(key)}>{label}</button>
+      <div className="filter-bar">
+        <div className="segmented" role="group" aria-label="Periode">
+          {PERIODS.map((p) => (
+            <button key={p.key} type="button" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>{p.label}</button>
           ))}
         </div>
-        {period === "custom" && (
-          <span className="row" style={{ gap: 6 }}>
-            <label className="sr-only" htmlFor="an-from">Dari tanggal</label>
-            <input id="an-from" type="date" className="input" style={{ width: "auto" }} value={custom.from} max={custom.to} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
-            <span className="muted">sampai</span>
-            <label className="sr-only" htmlFor="an-to">Sampai tanggal</label>
-            <input id="an-to" type="date" className="input" style={{ width: "auto" }} value={custom.to} min={custom.from} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
-          </span>
-        )}
+        <span className="small muted">{rangeLabel(cmp.current)} dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel})</span>
       </div>
-      <p className="small muted" style={{ marginTop: -10 }}>
-        {fmtShort(range.from)} – {fmtShort(range.to)}. Request masuk dihitung dari tanggal kirim, task selesai dari tanggal pindah ke Finish.
-      </p>
 
-      <section aria-label="Ringkasan periode" className="stats">
-        {data.kpis.map((k) => (
-          <div key={k.label} className="card stat">
-            <p className="small muted">{k.label}</p>
-            <p className="stat-value" style={{ color: k.color }}>{k.value}</p>
-            <p className="small muted">{k.hint}</p>
+      <section aria-label="Ringkasan tim" className="stats">
+        {[
+          ["Request masuk", team.cur.received, delta(team.cur.received, team.prev.received, { ...opts, better: "flat" })],
+          ["Task selesai", team.cur.done, delta(team.cur.done, team.prev.done, { ...opts, better: "up" })],
+          ["Tepat waktu", team.cur.onTime === null ? "-" : `${team.cur.onTime}%`, delta(team.cur.onTime, team.prev.onTime, { ...opts, better: "up", kind: "pct" })],
+          ["Rata-rata pengerjaan", team.cur.work === null ? "-" : fmtDuration(team.cur.work), delta(team.cur.work, team.prev.work, { ...opts, better: "down", kind: "minutes" })],
+          ["Rata-rata menunggu diambil", team.cur.wait === null ? "-" : fmtDuration(team.cur.wait), delta(team.cur.wait, team.prev.wait, { ...opts, better: "down", kind: "minutes" })],
+        ].map(([label, value, d]) => (
+          <div key={label} className="card stat">
+            <p className="small muted">{label}</p>
+            <p className="stat-value">{value}</p>
+            <p className={`small delta ${d.tone}`}>{d.text}</p>
           </div>
         ))}
       </section>
 
-      <section aria-label="Per desainer" className="grid-auto-340">
-        {data.pics.map((p) => (
-          <div key={p.name} className="card card-pad stack-lg">
+      <section aria-label="Per orang" className="grid-auto-340">
+        {people.map((p) => (
+          <article key={p.email} className="card card-pad stack-lg">
             <div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
-              <Avatar name={p.name} color={p.color} size={32} />
+              <Avatar name={p.name} color={p.color} size={40} />
               <div>
-                <h2 className="h-section">{p.name}</h2>
-                <p className="small muted">{p.active} task aktif · {p.note}</p>
+                <h2 className="h-section" style={{ fontSize: 16 }}>{p.name}</h2>
+                <p className="small muted">{p.active} task aktif · {p.shared} selesai dikerjakan bersama</p>
               </div>
             </div>
-            <div className="bar-track" aria-hidden="true"><div style={{ width: `${Math.round((p.active / maxActive) * 100)}%`, background: p.color }} /></div>
-            <dl className="pic-stats">
-              {p.stats.map((s) => (
-                <div key={s.label}><dt>{s.label}</dt><dd style={{ color: s.color }}>{s.value}</dd></div>
-              ))}
+            <dl className="metrics">
+              <Metric label="Task selesai" value={p.cur.done} d={delta(p.cur.done, p.prev.done, { ...opts, better: "up" })} />
+              <Metric label="Tepat waktu" value={p.cur.onTime === null ? "-" : `${p.cur.onTime}%`} d={delta(p.cur.onTime, p.prev.onTime, { ...opts, better: "up", kind: "pct" })} />
+              <Metric label="Rata-rata pengerjaan" value={p.cur.work === null ? "-" : fmtDuration(p.cur.work)} d={delta(p.cur.work, p.prev.work, { ...opts, better: "down", kind: "minutes" })} />
+              <Metric label="Rata-rata menunggu diambil" value={p.cur.wait === null ? "-" : fmtDuration(p.cur.wait)} d={delta(p.cur.wait, p.prev.wait, { ...opts, better: "down", kind: "minutes" })} />
+              <Metric label="Masuk Delay" value={p.cur.delays} d={delta(p.cur.delays, p.prev.delays, { ...opts, better: "down" })} />
             </dl>
-          </div>
+            <div className="stack">
+              <p className="eyebrow">Task selesai per {cmp.unit === "week" ? "hari" : "minggu"}</p>
+              <Bars cur={p.curSeries} prev={p.prevSeries} labels={labels} color={p.color} unitLabel={cmp.unit === "week" ? "hari" : "minggu"} />
+              <p className="legend small muted">
+                <span><i style={{ background: p.color }} /> Periode ini</span>
+                <span><i className="prev" /> {cmp.prevLabel[0].toUpperCase() + cmp.prevLabel.slice(1)}</span>
+              </p>
+            </div>
+          </article>
         ))}
+        {!people.length && <p className="empty-box">Belum ada anggota berperan desainer.</p>}
       </section>
 
       <section className="grid-auto-340">
-        {[["Request per kategori", data.byCategory], ["Request per divisi", data.byDivision]].map(([title, rows]) => (
+        {[["Request per kategori", rows(received, "category", CATEGORIES)], ["Request per divisi", rows(received, "division", DIVISIONS)]].map(([title, list]) => (
           <div key={title} className="card card-pad stack">
-            <h2 className="h-card" style={{ marginBottom: 4 }}>{title}</h2>
-            {rows.length === 0 && <p className="muted">Belum ada request di periode ini.</p>}
-            {rows.map((r) => (
+            <h2 className="h-section">{title}</h2>
+            {list.length === 0 && <p className="muted">Belum ada request di periode ini.</p>}
+            {list.map((r) => (
               <div key={r.label} className="bar-row">
                 <span className="small" style={{ color: "var(--zinc-700)" }}>{r.label}</span>
                 <div className="bar-track" aria-hidden="true"><div style={{ width: r.pct }} /></div>
@@ -145,6 +185,10 @@ export default function AnalyticsPage() {
           </div>
         ))}
       </section>
+      <p className="hint">
+        Task yang dikerjakan bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu hanya jam kerja Senin–Jumat 08.00–17.00.
+        "Menunggu diambil" = waktu di kolom Request untuk task yang diambil orang itu. Periode yang sedang berjalan dibandingkan dengan rentang yang sama panjang di periode sebelumnya.
+      </p>
     </>
   );
 }

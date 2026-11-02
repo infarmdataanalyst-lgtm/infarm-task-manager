@@ -180,9 +180,37 @@ export async function markRead(taskId, email) {
   must(await db().from("task_reads").upsert({ task_id: taskId, member_email: email }, { onConflict: "task_id,member_email", ignoreDuplicates: true }));
 }
 
+// Tim menambah lampiran ke task (maks 5); file di-upload dulu, lalu daftar lampiran disimpan.
+export async function addAttachments(taskId, drafts) {
+  const current = await getTask(taskId);
+  if (!current) throw new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
+  if (current.attachments.length + drafts.length > 5) throw new Error("Maksimal 5 lampiran per task.");
+  const uploaded = [];
+  for (const a of drafts) uploaded.push(await uploadAttachment(taskId, a));
+  try {
+    return await updateTask(taskId, (t) => ({ attachments: [...t.attachments, ...uploaded] }));
+  } catch (e) {
+    await removeFiles(attachmentPaths(uploaded));
+    throw e;
+  }
+}
+
+// Hapus satu lampiran (file di Storage ikut dihapus oleh updateTask).
+export const removeAttachment = (taskId, attachmentId) =>
+  updateTask(taskId, (t) => ({ attachments: t.attachments.filter((a) => a.id !== attachmentId) }));
+
 export async function listHistory(taskId) {
   const rows = must(await db().from("task_history").select("*").eq("task_id", taskId).order("created_at", { ascending: false }).limit(200));
   return rows.map((r) => ({ id: String(r.id), createdAt: r.created_at, actorName: r.actor_name, actorEmail: r.actor_email, action: r.action, changes: r.changes || [] }));
+}
+
+// Semua riwayat lintas task (halaman Audit admin), terbaru dulu.
+export async function listAllHistory(limit = 500) {
+  const rows = must(await db().from("task_history").select("*, task:tasks(title, deleted_at)").order("created_at", { ascending: false }).limit(limit));
+  return rows.map((r) => ({
+    id: String(r.id), taskId: r.task_id, taskTitle: r.task?.title || "(task tidak ditemukan)", taskDeleted: !!r.task?.deleted_at,
+    createdAt: r.created_at, actorName: r.actor_name, actorEmail: r.actor_email, action: r.action, changes: r.changes || [],
+  }));
 }
 
 // ─── Checklist: setiap aksi hanya mengubah satu item ────────────

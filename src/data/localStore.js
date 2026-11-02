@@ -111,17 +111,22 @@ export function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
-export async function createTask(input) {
-  const now = new Date().toISOString();
-  const attachments = [];
-  for (const a of input.attachments || []) {
+async function storeDrafts(drafts) {
+  const out = [];
+  for (const a of drafts) {
     const keepData = a.type !== "pdf" || a.size <= MAX_LOCAL_PDF;
-    attachments.push({
+    out.push({
       id: a.id, name: a.name, size: a.size, type: a.type, path: null,
       url: keepData ? await blobToDataUrl(a.blob) : null,
       thumbUrl: a.thumbBlob ? await blobToDataUrl(a.thumbBlob) : null,
     });
   }
+  return out;
+}
+
+export async function createTask(input) {
+  const now = new Date().toISOString();
+  const attachments = await storeDrafts(input.attachments || []);
   const task = normalizeTask({
     ...input, attachments, id: newId(), status: "request", pic: null, createdAt: now, updatedAt: now,
     workSessions: [{ status: "request", startedAt: now, endedAt: null }],
@@ -135,6 +140,17 @@ export async function updateTask(id, patch) {
   return patchTask(id, patch);
 }
 
+export async function addAttachments(taskId, drafts) {
+  const t = await getTask(taskId);
+  if (t && t.attachments.length + drafts.length > 5) throw new Error("Maksimal 5 lampiran per task.");
+  const stored = await storeDrafts(drafts);
+  return patchTask(taskId, (x) => ({ attachments: [...x.attachments, ...stored] }));
+}
+
+export async function removeAttachment(taskId, attachmentId) {
+  return patchTask(taskId, (x) => ({ attachments: x.attachments.filter((a) => a.id !== attachmentId) }));
+}
+
 export async function listReads(email) {
   return arr((readRaw(READS_KEY) || {})[email]);
 }
@@ -143,6 +159,14 @@ export async function markRead(taskId, email) {
   const all = readRaw(READS_KEY) || {};
   all[email] = [...new Set([...arr(all[email]), taskId])];
   save(READS_KEY, all);
+}
+
+export async function listAllHistory(limit = 500) {
+  const titles = new Map(getCache().map((t) => [t.id, t]));
+  return Object.entries(readRaw(HISTORY_KEY) || {})
+    .flatMap(([taskId, list]) => arr(list).map((h) => ({ ...h, taskId, taskTitle: titles.get(taskId)?.title || "(task tidak ditemukan)", taskDeleted: !!titles.get(taskId)?.deletedAt })))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, limit);
 }
 
 export async function listHistory(taskId) {

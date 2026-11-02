@@ -26,12 +26,19 @@ export const editTask = (id, fields) => store.updateTask(id, fields);
 
 export const setResultLinks = (id, resultLinks) => store.updateTask(id, { resultLinks });
 
+// Lampiran oleh tim (maks 5 per task). drafts = hasil prepareAttachment (lib/images.js).
+export const addAttachments = (id, drafts) => store.addAttachments(id, drafts);
+export const removeAttachment = (id, attachmentId) => store.removeAttachment(id, attachmentId);
+
 // Hapus = arsip: task hilang dari board, tetap tersimpan beserta riwayatnya. Admin bisa memulihkan.
 export const deleteTask = (id) => store.updateTask(id, { deletedAt: new Date().toISOString() });
 
 export const restoreTask = (id) => store.updateTask(id, { deletedAt: null });
 
 export const listHistory = (id) => store.listHistory(id);
+
+// Halaman Audit (admin): semua riwayat lintas task.
+export const listAllHistory = (limit) => store.listAllHistory(limit);
 
 // Penanda "sudah dilihat" per akun: badge "Baru" hilang setelah detail task dibuka akun itu.
 export const listReads = (email) => store.listReads(email);

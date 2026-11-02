@@ -71,7 +71,9 @@ Kalau ada langkah yang gagal, kirim screenshot ke developer.
 
 ## Catatan
 
-- **Anggota baru:** tambahkan Gmail-nya di tabel `team_members` (tahap 2: lewat halaman Anggota) **dan**, bila Google Auth Platform → Audience masih **Testing**, di **Test users**.
+- **Anggota baru:** admin menambahkannya di halaman **Anggota** (`/tim/anggota`) **dan**, bila Google Auth Platform → Audience masih **Testing**, di **Test users**.
+- **Setiap ada pembaruan `schema.sql`** (mis. tahap 2 menambah pengaman "minimal satu admin aktif"): salin ulang seluruh isi `supabase/schema.sql` ke SQL Editor → **Run**. Aman dijalankan ulang; data tidak hilang.
+- **Anggota keluar tim:** di halaman Anggota hilangkan centang **Aktif** (task dan riwayatnya tetap). Hapus hanya bila perlu; task yang PIC-nya orang itu tetap memakai namanya sampai PIC diganti.
 - **Ganti akun uji coba dengan akun asli:** jalankan [`supabase/reset-anggota.sql`](../supabase/reset-anggota.sql) (isi Gmail asli dulu). Di bagian bawahnya ada baris opsional untuk mengosongkan semua task uji coba.
 - **Setelah memperbarui kode dari GitHub:** jalankan ulang `supabase/schema.sql` **sebelum** deploy (aman dijalankan ulang). Perubahan 2 Nov 2026 (waktu per kolom) membutuhkan ini.
 - **Paket Free** cukup untuk volume tim. Pantau di dashboard Supabase → **Usage**.

@@ -2,14 +2,14 @@
 // Kanan atas: Edit (hijau), Hapus (merah, dengan konfirmasi), Tutup (abu-abu).
 // Isi: info, brief, lampiran & link, checklist per orang, link hasil, riwayat. Bawah: Pindah ke… + aksi utama.
 
-import React, { useEffect, useState } from "react";
-import { ArrowLeftRight, Check, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
-import { CATEGORIES, DIVISIONS, STATUS } from "../../config";
+import React, { useEffect, useRef, useState } from "react";
+import { ArrowLeftRight, Check, Paperclip, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { CATEGORIES, DIVISIONS, MAX_ATTACHMENTS, STATUS } from "../../config";
 import * as actions from "../../data/taskActions";
 import { helpers } from "../../data/taskModel";
 import { describeEntry } from "../../lib/changes";
 import { daysLate, fmtDateTime, fmtDay, isOverdue } from "../../lib/dates";
-import { newId } from "../../lib/images";
+import { newId, prepareAttachment } from "../../lib/images";
 import { displayUrl, normalizeUrl } from "../../lib/links";
 import { fmtDuration, isTimerRunning, stageMinutes } from "../../lib/worktime";
 import { AttachmentList, Avatar, LinkList, Modal, StatusBadge } from "../../components/ui";
@@ -93,6 +93,50 @@ function EditForm({ task, run, busy, onDone }) {
         <button type="button" className="btn btn-neutral" onClick={onDone}>Batal</button>
       </div>
     </form>
+  );
+}
+
+// Lampiran: tim bisa menambah (maks 5) dan menghapus. File dihapus dari Storage saat dihapus dari task.
+function Attachments({ task, run, busy }) {
+  const fileRef = useRef(null);
+  const [confirm, setConfirm] = useState(null);
+  const room = MAX_ATTACHMENTS - task.attachments.length;
+  const add = async (files) => {
+    const list = Array.from(files || []).slice(0, room);
+    if (!list.length) return;
+    await run(async () => {
+      const drafts = [];
+      for (const f of list) drafts.push(await prepareAttachment(f));
+      await actions.addAttachments(task.id, drafts);
+    }, `${list.length} lampiran ditambahkan.`);
+  };
+  return (
+    <>
+      <div className="row-between">
+        <h3 className="eyebrow">Lampiran ({task.attachments.length} dari {MAX_ATTACHMENTS})</h3>
+        {room > 0 && (
+          <button type="button" className="btn btn-text btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <Paperclip size={14} aria-hidden="true" /> Tambah lampiran
+          </button>
+        )}
+      </div>
+      <input ref={fileRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
+        onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+      <AttachmentList task={task} onRemove={setConfirm} />
+      {confirm && (
+        <Modal labelledBy="hapus-lampiran" onClose={() => setConfirm(null)}>
+          <h2 id="hapus-lampiran" className="h-section">Hapus lampiran ini?</h2>
+          <p>"{confirm.name}" dihapus dari task dan dari penyimpanan. Tercatat di riwayat.</p>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-neutral" onClick={() => setConfirm(null)}>Batal</button>
+            <button type="button" className="btn btn-danger" disabled={busy}
+              onClick={async () => { if (await run(() => actions.removeAttachment(task.id, confirm.id), "Lampiran dihapus.")) setConfirm(null); }}>
+              <Trash2 size={16} aria-hidden="true" /> Ya, hapus
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -267,8 +311,7 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
           )}
 
           <section className="stack">
-            <h3 className="eyebrow">Lampiran ({task.attachments.length} dari 5)</h3>
-            <AttachmentList task={task} />
+            <Attachments task={task} run={run} busy={busy} />
             {!editing && <LinkList links={task.referenceLinks} />}
           </section>
 
