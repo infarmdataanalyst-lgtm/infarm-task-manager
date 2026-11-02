@@ -101,11 +101,14 @@ create table if not exists public.tasks (
   deleted_by text,
   updated_at timestamptz not null default now(),
   constraint tasks_pic_wajib check (status = 'request' or pic is not null),
-  constraint tasks_link_hasil_wajib check (status <> 'finish' or jsonb_array_length(result_links) > 0),
   constraint tasks_lampiran_maks check (jsonb_array_length(attachments) <= 5)
 );
 
+-- Link hasil desain opsional sejak 2 Nov 2026 (dulu wajib saat Finish).
+alter table public.tasks drop constraint if exists tasks_link_hasil_wajib;
+
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
+create index if not exists tasks_finished_at_idx on public.tasks (finished_at desc) where status = 'finish';
 create index if not exists tasks_status_idx on public.tasks (status) where deleted_at is null;
 
 -- ─── Checklist: 1 baris = 1 item, bisa dibagi ke beberapa desainer ──
@@ -263,8 +266,11 @@ begin
   end if;
 
   if new.status is distinct from old.status then
-    if new.status = 'request' then
-      new.pic := null;                                    -- dikembalikan ke Request = PIC dilepas
+    -- PIC ditentukan di kolom Request; yang boleh memindahkan keluar dari Request hanya PIC itu sendiri
+    -- atau admin. Perubahan dari SQL Editor/dashboard (tanpa akun) tidak dibatasi.
+    if old.status = 'request' and public.current_email() <> '' and not public.is_admin()
+       and new.pic is distinct from (select name from public.team_members where email = public.current_email()) then
+      raise exception 'bukan_pic' using errcode = '42501';
     end if;
     if new.status = 'on_progress' and new.started_at is null then
       new.started_at := now();
@@ -335,6 +341,8 @@ begin
     when old.deleted_at is null and new.deleted_at is not null then 'dihapus'
     when old.deleted_at is not null and new.deleted_at is null then 'dipulihkan'
     when old.attachments_deleted_at is null and new.attachments_deleted_at is not null then 'lampiran_dihapus'
+    when old.status = 'request' and new.status = 'request' and new.pic is distinct from old.pic then
+      case when new.pic is null then 'pic_dilepas' else 'pic_ditentukan' end
     else public.task_action(old.status, new.status)
   end;
   if v_changes <> '[]'::jsonb or v_action in ('dihapus', 'dipulihkan', 'lampiran_dihapus') then

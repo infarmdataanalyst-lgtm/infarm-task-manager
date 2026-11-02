@@ -213,8 +213,8 @@ function TeamApp({ auth }) {
     <div className={`header-center ${searchOpen ? "" : "closed"}`}>
       <label className="header-search">
         <Search size={16} aria-hidden="true" />
-        <span className="sr-only">Cari judul task</span>
-        <input type="search" placeholder="Cari judul task" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <span className="sr-only">Cari judul, brief, requester, atau divisi</span>
+        <input type="search" placeholder="Cari judul, brief, requester, atau divisi" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
     </div>
   );
@@ -222,7 +222,7 @@ function TeamApp({ auth }) {
   return (
     <>
       <AppHeader title="Design Task Hub" subtitle="infarm.id · Tim Desain" to="/tim" center={search}>
-        <button type="button" className="btn btn-on-green show-mobile" aria-label="Cari judul task" aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}>
+        <button type="button" className="btn btn-on-green show-mobile" aria-label="Cari task" aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}>
           <Search size={18} aria-hidden="true" />
         </button>
         <button type="button" className="btn btn-on-green hide-mobile" onClick={copyRequestLink}>

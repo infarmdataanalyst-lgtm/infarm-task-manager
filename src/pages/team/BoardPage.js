@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
-import { involves } from "../../data/taskModel";
+import { canLeaveRequest, involves, notPicMessage } from "../../data/taskModel";
 import { daysBetween, isOverdue, parseDay, today } from "../../lib/dates";
 import { Avatar, useAction, useNow } from "../../components/ui";
 import TaskCard from "./TaskCard";
@@ -13,6 +13,9 @@ import TaskDetail from "./TaskDetail";
 import MoveDialog from "./MoveDialog";
 
 const FINISH_WINDOW_DAYS = 30;
+
+// Pencarian: judul, brief, nama requester, dan divisi (tidak peka huruf besar/kecil, cocok sebagian).
+const matchesQuery = (t, q) => [t.title, t.description, t.requesterName, t.division].some((v) => (v || "").toLowerCase().includes(q));
 
 const byDue = (a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || new Date(a.createdAt) - new Date(b.createdAt);
 
@@ -44,7 +47,39 @@ export default function BoardPage() {
   const [dropCol, setDropCol] = useState(null);
   const draggable = useMemo(canDrag, []);
 
-  const selected = id ? tasks.find((t) => t.id === id) : null;
+  // Task Finish lama yang tidak dimuat board: dari pencarian database dan dari link langsung.
+  const [archive, setArchive] = useState([]);
+  const [linked, setLinked] = useState(null); // { id, task|null }
+  const q = query.trim().toLowerCase();
+  useEffect(() => {
+    if (q.length < 2) {
+      setArchive([]);
+      return undefined;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      actions.searchTasks(q).then((list) => alive && setArchive(list)).catch(() => alive && setArchive([]));
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [q]);
+  const loadedIds = useMemo(() => new Set(tasks.map((t) => t.id)), [tasks]);
+  const archiveHits = useMemo(() => archive.filter((t) => !loadedIds.has(t.id)), [archive, loadedIds]);
+  const archiveIds = useMemo(() => new Set(archiveHits.map((t) => t.id)), [archiveHits]);
+
+  const fromLoaded = id ? tasks.find((t) => t.id === id) || archiveHits.find((t) => t.id === id) : null;
+  useEffect(() => {
+    if (!id || fromLoaded || linked?.id === id) return undefined;
+    let alive = true;
+    actions.getTask(id).then((t) => alive && setLinked({ id, task: t && !t.deletedAt ? t : null })).catch(() => alive && setLinked({ id, task: null }));
+    return () => {
+      alive = false;
+    };
+  }, [id, fromLoaded, linked]);
+  const selected = fromLoaded || (id && linked && linked.id === id ? linked.task : null);
+  const notFound = !!id && !selected && !!linked && linked.id === id;
 
   // Membuka detail = akun ini sudah melihat task tersebut (badge "Baru" hilang untuk akun ini saja).
   useEffect(() => {
@@ -72,22 +107,22 @@ export default function BoardPage() {
   ];
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return tasks.filter(
+    return [...tasks, ...archiveHits].filter(
       (t) =>
         (!mine || involves(t, member.name)) &&
         (pic === "all" || involves(t, pic)) &&
         matchesDue(t, due) &&
-        (!q || t.title.toLowerCase().includes(q))
+        (!q || matchesQuery(t, q))
     );
-  }, [tasks, query, mine, member.name, pic, due]);
+  }, [tasks, archiveHits, q, mine, member.name, pic, due]);
 
   const columns = STATUSES.map((s) => {
     let items = filtered.filter((t) => t.status === s);
     let hidden = 0;
     if (s === "finish") {
       items.sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt));
-      if (!showAllFinished) {
+      // Saat mencari, semua hasil Finish ditampilkan (tidak dibatasi 30 hari).
+      if (!showAllFinished && !q) {
         const recent = items.filter(recentFinished);
         hidden = items.length - recent.length;
         items = recent;
@@ -100,7 +135,8 @@ export default function BoardPage() {
 
   const filtersActive = query || mine || pic !== "all" || due !== "all";
 
-  const take = (t, name) => run(() => actions.takeTask(t.id, name), `"${t.title}" diambil ${name}. Waktu kerja mulai berjalan.`);
+  const assign = (t, name) => run(() => actions.assignPic(t.id, name), `PIC "${t.title}": ${name}. Task tetap di Request sampai ${name} memulainya.`);
+  const start = (t) => run(() => actions.startTask(t.id), `"${t.title}" mulai dikerjakan. Waktu On Progress berjalan.`);
 
   // Geser kartu: pindah langsung bila tidak perlu isian; selain itu buka dialog dengan tujuan terpilih.
   const drop = (status) => {
@@ -108,7 +144,9 @@ export default function BoardPage() {
     setDragId(null);
     setDropCol(null);
     if (!t || t.status === status) return;
-    const needsDialog = status === "finish" || status === "delay" || (!t.pic && status !== "request");
+    const leaving = t.status === "request" && status !== "request";
+    if (leaving && t.pic && !canLeaveRequest(t, member)) return showToast(notPicMessage(t.pic), "error");
+    const needsDialog = status === "finish" || status === "delay" || (leaving && !t.pic);
     if (needsDialog) setMoving({ task: t, target: status });
     else run(() => actions.moveTask(t.id, status), `Dipindah ke ${STATUS[status].label}.`);
   };
@@ -192,7 +230,9 @@ export default function BoardPage() {
                   key={t.id}
                   task={t}
                   isNew={isNew(t)}
+                  fromArchive={archiveIds.has(t.id)}
                   now={now}
+                  member={member}
                   designers={designers}
                   colorOf={colorOf}
                   busy={busy}
@@ -200,7 +240,8 @@ export default function BoardPage() {
                   dragging={dragId === t.id}
                   onDragStart={(task) => setDragId(task.id)}
                   onDragEnd={() => { setDragId(null); setDropCol(null); }}
-                  onTake={take}
+                  onAssign={assign}
+                  onStart={start}
                   onMove={(task) => setMoving({ task })}
                 />
               ))}
@@ -214,7 +255,7 @@ export default function BoardPage() {
         ))}
       </section>
 
-      {id && !selected && (
+      {notFound && (
         <div className="modal-wrap">
           <div className="modal" role="alertdialog" aria-labelledby="nf-title">
             <h2 id="nf-title" className="h-section">Task tidak ditemukan</h2>
@@ -227,12 +268,14 @@ export default function BoardPage() {
         <TaskDetail
           task={selected}
           now={now}
+          member={member}
           designers={designers}
           colorOf={colorOf}
           run={run}
           busy={busy}
           onClose={closeDetail}
-          onTake={take}
+          onAssign={assign}
+          onStart={start}
           onMove={(task, target) => setMoving({ task, target })}
         />
       )}
@@ -242,6 +285,7 @@ export default function BoardPage() {
           task={tasks.find((t) => t.id === moving.task.id) || moving.task}
           initialTarget={moving.target}
           designers={designers}
+          member={member}
           run={run}
           busy={busy}
           onClose={() => setMoving(null)}

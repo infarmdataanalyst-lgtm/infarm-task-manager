@@ -85,12 +85,12 @@ function patchTask(id, patch, { log = true } = {}) {
   if (!current) throw new Error("Task tidak ditemukan. Mungkin sudah dihapus.");
   if (current.deletedAt && localMember()?.role !== "admin") throw new Error("Task ini sudah dihapus. Hanya admin yang bisa memulihkannya.");
   const changes = typeof patch === "function" ? patch(current) : patch;
-  const updated = normalizeTask({ ...applyTransition(current, changes), updatedAt: new Date().toISOString() });
+  const updated = normalizeTask({ ...applyTransition(current, changes, undefined, localMember()), updatedAt: new Date().toISOString() });
   if (!current.deletedAt && updated.deletedAt) updated.deletedBy = localMember()?.email || null;
   write(list.map((t) => (t.id === id ? updated : t)));
   if (log) {
     const diff = taskChanges(current, updated);
-    const action = !current.deletedAt && updated.deletedAt ? "dihapus" : current.deletedAt && !updated.deletedAt ? "dipulihkan" : historyAction(current.status, updated.status);
+    const action = !current.deletedAt && updated.deletedAt ? "dihapus" : current.deletedAt && !updated.deletedAt ? "dipulihkan" : historyAction(current.status, updated.status, current.pic, updated.pic);
     if (diff.length || action === "dihapus" || action === "dipulihkan") logHistory(id, actor(), action, diff);
   }
   return updated;
@@ -134,6 +134,11 @@ export async function createTask(input) {
   write([...getCache(), task]);
   logHistory(task.id, `${task.requesterName || "requester"} (requester)`, "dibuat");
   return task;
+}
+
+// Mode uji coba memuat semua task, jadi tidak ada arsip lama yang perlu dicari di luar daftar.
+export async function searchTasks() {
+  return [];
 }
 
 export async function updateTask(id, patch) {

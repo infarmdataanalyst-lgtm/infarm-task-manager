@@ -132,7 +132,7 @@ export default function AnalyticsPage() {
           ["Task selesai", team.cur.done, delta(team.cur.done, team.prev.done, { ...opts, better: "up" })],
           ["Tepat waktu", team.cur.onTime === null ? "-" : `${team.cur.onTime}%`, delta(team.cur.onTime, team.prev.onTime, { ...opts, better: "up", kind: "pct" })],
           ["Rata-rata pengerjaan", team.cur.work === null ? "-" : fmtDuration(team.cur.work), delta(team.cur.work, team.prev.work, { ...opts, better: "down", kind: "minutes" })],
-          ["Rata-rata menunggu diambil", team.cur.wait === null ? "-" : fmtDuration(team.cur.wait), delta(team.cur.wait, team.prev.wait, { ...opts, better: "down", kind: "minutes" })],
+          ["Rata-rata menunggu dikerjakan", team.cur.wait === null ? "-" : fmtDuration(team.cur.wait), delta(team.cur.wait, team.prev.wait, { ...opts, better: "down", kind: "minutes" })],
         ].map(([label, value, d]) => (
           <div key={label} className="card stat">
             <p className="small muted">{label}</p>
@@ -156,7 +156,7 @@ export default function AnalyticsPage() {
               <Metric label="Task selesai" value={p.cur.done} d={delta(p.cur.done, p.prev.done, { ...opts, better: "up" })} />
               <Metric label="Tepat waktu" value={p.cur.onTime === null ? "-" : `${p.cur.onTime}%`} d={delta(p.cur.onTime, p.prev.onTime, { ...opts, better: "up", kind: "pct" })} />
               <Metric label="Rata-rata pengerjaan" value={p.cur.work === null ? "-" : fmtDuration(p.cur.work)} d={delta(p.cur.work, p.prev.work, { ...opts, better: "down", kind: "minutes" })} />
-              <Metric label="Rata-rata menunggu diambil" value={p.cur.wait === null ? "-" : fmtDuration(p.cur.wait)} d={delta(p.cur.wait, p.prev.wait, { ...opts, better: "down", kind: "minutes" })} />
+              <Metric label="Rata-rata menunggu dikerjakan" value={p.cur.wait === null ? "-" : fmtDuration(p.cur.wait)} d={delta(p.cur.wait, p.prev.wait, { ...opts, better: "down", kind: "minutes" })} />
               <Metric label="Masuk Delay" value={p.cur.delays} d={delta(p.cur.delays, p.prev.delays, { ...opts, better: "down" })} />
             </dl>
             <div className="stack">
@@ -189,7 +189,7 @@ export default function AnalyticsPage() {
       </section>
       <p className="hint">
         Task yang dikerjakan bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu hanya jam kerja Senin–Jumat 08.00–17.00 (1 hari = 9 jam kerja).
-        "Menunggu diambil" = waktu di kolom Request untuk task yang diambil orang itu. Periode ini dibandingkan dengan periode penuh sebelumnya; selama periode ini belum selesai, angkanya masih bisa bertambah.
+        "Menunggu dikerjakan" = waktu di kolom Request sampai task mulai dikerjakan (On Progress), untuk task yang PIC-nya orang itu. Periode ini dibandingkan dengan periode penuh sebelumnya; selama periode ini belum selesai, angkanya masih bisa bertambah.
       </p>
     </>
   );

@@ -1,4 +1,4 @@
-// Aksi alur kerja. Di mode Supabase, aturan (PIC wajib, link hasil wajib, waktu mulai/selesai,
+// Aksi alur kerja. Di mode Supabase, aturan (PIC wajib, hanya PIC/admin yang memulai, waktu mulai/selesai,
 // sesi waktu kerja, riwayat) ditegakkan database; di mode uji coba oleh localStore.
 
 import * as store from "./taskStore";
@@ -9,16 +9,15 @@ export const submitRequest = (input) => store.createTask(input);
 
 // ─── Tim desain ─────────────────────────────────────────────────
 
-// Request → On Progress dengan PIC yang dipilih (tombol Arum/Denny di kartu).
-export const takeTask = (id, pic) => store.updateTask(id, { pic, status: "on_progress" });
+// Tentukan PIC di kolom Request (tombol Arum/Denny di kartu). Task tetap di Request;
+// PIC sendiri (atau admin) yang memindahkannya ke On Progress lewat startTask/moveTask.
+export const assignPic = (id, pic) => store.updateTask(id, { pic });
 
-// Pindah kolom maju/mundur. extra: { pic } dari Request, { delayReason } ke Delay, { resultLinks } ke Finish.
-export const moveTask = (id, status, extra = {}) => {
-  if (status === "finish" && extra.resultLinks && !extra.resultLinks.length) {
-    return Promise.reject(new Error("Isi minimal satu link hasil desain."));
-  }
-  return store.updateTask(id, { ...extra, status });
-};
+// Request → On Progress oleh PIC atau admin.
+export const startTask = (id) => store.updateTask(id, { status: "on_progress" });
+
+// Pindah kolom maju/mundur. extra: { pic } dari Request, { delayReason } ke Delay, { resultLinks } ke Finish (opsional).
+export const moveTask = (id, status, extra = {}) => store.updateTask(id, { ...extra, status });
 
 export const changePic = (id, pic) => store.updateTask(id, { pic });
 
@@ -36,6 +35,10 @@ export const deleteTask = (id) => store.updateTask(id, { deletedAt: new Date().t
 export const restoreTask = (id) => store.updateTask(id, { deletedAt: null });
 
 export const listHistory = (id) => store.listHistory(id);
+
+// Task Finish lama (di luar yang dimuat board) dicari langsung di database; getTask untuk link langsung.
+export const searchTasks = (query) => store.searchTasks(query);
+export const getTask = (id) => store.getTask(id);
 
 // Halaman Audit (admin): semua riwayat lintas task.
 export const listAllHistory = (limit) => store.listAllHistory(limit);

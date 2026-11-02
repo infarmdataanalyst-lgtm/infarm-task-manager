@@ -23,7 +23,9 @@ export const FIELD_LABEL = {
 
 export const ACTION_LABEL = {
   dibuat: "mengirim request lewat form",
-  diambil: "mengambil task",
+  diambil: "mulai mengerjakan task",
+  pic_ditentukan: "menentukan PIC",
+  pic_dilepas: "melepas PIC",
   dipindah: "memindah task",
   ditunda: "menunda task",
   dilanjutkan: "melanjutkan task",

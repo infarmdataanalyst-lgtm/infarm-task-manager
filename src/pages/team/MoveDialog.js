@@ -1,27 +1,29 @@
 // Dialog "Pindah ke…": pilih kolom tujuan (maju atau mundur) beserta isian yang dibutuhkan.
-// - Dari Request ke kolom lain: pilih PIC dulu.
+// - Dari Request ke kolom lain: hanya PIC atau admin. Admin bisa memilih/mengganti PIC; desainer tanpa PIC
+//   otomatis menjadi PIC. Database menolak selain itu ('bukan_pic').
 // - Ke Delay: alasan (opsional), tampil di kartu.
-// - Ke Finish: link hasil wajib. Total waktu berhenti.
+// - Ke Finish: link hasil (opsional). Total waktu berhenti.
 // Waktu per kolom tercatat otomatis (lihat stageMinutes di lib/worktime.js).
-// - Ke Request: PIC dilepas; waktu yang sudah tercatat tetap disimpan.
+// - Ke Request: PIC tetap; waktu yang sudah tercatat tetap disimpan.
 
 import React, { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { STATUS, STATUSES } from "../../config";
 import { moveTask } from "../../data/taskActions";
+import { canLeaveRequest, notPicMessage } from "../../data/taskModel";
 import { newId } from "../../lib/images";
 import { normalizeUrl } from "../../lib/links";
 import { fmtDuration, stageMinutes } from "../../lib/worktime";
 import { Modal } from "../../components/ui";
 
 const NOTES = {
-  request: "PIC dilepas; waktu yang sudah tercatat tetap disimpan",
+  request: "PIC tetap; waktu yang sudah tercatat tetap disimpan",
   on_progress: "Sedang dikerjakan",
   delay: "Ditunda karena menunggu sesuatu",
-  finish: "Wajib isi link hasil; total waktu berhenti",
+  finish: "Link hasil opsional; total waktu berhenti",
 };
 
-export default function MoveDialog({ task, initialTarget, designers, run, busy, onClose, onDone }) {
+export default function MoveDialog({ task, initialTarget, designers, member, run, busy, onClose, onDone }) {
   const [target, setTarget] = useState(initialTarget && initialTarget !== task.status ? initialTarget : STATUSES.find((s) => s !== task.status));
   const [pic, setPic] = useState(task.pic || "");
   const [reason, setReason] = useState(task.delayReason || "");
@@ -29,20 +31,27 @@ export default function MoveDialog({ task, initialTarget, designers, run, busy, 
     task.resultLinks.length ? task.resultLinks.map((l) => ({ id: l.id, value: l.url })) : [{ id: newId(), value: "" }]
   );
   const [error, setError] = useState("");
-  const needsPic = !task.pic && target !== "request";
+  const isAdmin = member?.role === "admin";
+  const leaving = task.status === "request" && target !== "request";
+  // Admin memilih PIC; desainer tanpa PIC otomatis jadi PIC; PIC lain tidak boleh memulai.
+  const choosePic = leaving && isAdmin;
+  const selfPic = leaving && !isAdmin && !task.pic ? member?.name : null;
+  const blocked = leaving && !isAdmin && !!task.pic && task.pic !== member?.name;
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     const extra = {};
-    if (needsPic) {
+    if (blocked) return setError(notPicMessage(task.pic));
+    if (choosePic) {
       if (!pic) return setError("Pilih PIC dulu.");
-      extra.pic = pic;
+      if (pic !== task.pic) extra.pic = pic;
     }
+    if (selfPic) extra.pic = selfPic;
+    if (leaving && !canLeaveRequest({ ...task, ...extra }, member)) return setError(notPicMessage(task.pic));
     if (target === "delay") extra.delayReason = reason.trim() || null;
     if (target === "finish") {
       const filled = links.filter((l) => l.value.trim()).map((l) => ({ id: l.id, url: normalizeUrl(l.value) }));
-      if (!filled.length) return setError("Isi minimal satu link hasil desain.");
       if (filled.some((l) => !l.url)) return setError("Ada link yang tidak valid. Contoh: https://drive.google.com/…");
       extra.resultLinks = filled;
     }
@@ -78,7 +87,9 @@ export default function MoveDialog({ task, initialTarget, designers, run, busy, 
           })}
         </div>
 
-        {needsPic && (
+        {blocked && <p className="callout-cream" role="note">{notPicMessage(task.pic)}</p>}
+        {selfPic && <p className="callout-cream" role="note">Kamu ({selfPic}) akan menjadi PIC task ini.</p>}
+        {choosePic && (
           <div className="stack">
             <p className="label">PIC <span className="required">*</span></p>
             <div className="grid-2 keep">
@@ -101,7 +112,7 @@ export default function MoveDialog({ task, initialTarget, designers, run, busy, 
 
         {target === "finish" && (
           <div className="stack">
-            <label className="label" htmlFor={`hasil-${links[0].id}`}>Link hasil desain <span className="required">*</span></label>
+            <label className="label" htmlFor={`hasil-${links[0].id}`}>Link hasil desain <span className="muted" style={{ fontWeight: 400 }}>(opsional)</span></label>
             {links.map((l, i) => (
               <div key={l.id} className="row" style={{ flexWrap: "nowrap" }}>
                 <input
@@ -133,7 +144,7 @@ export default function MoveDialog({ task, initialTarget, designers, run, busy, 
 
         <div className="modal-actions">
           <button type="button" className="btn btn-neutral" onClick={onClose}>Batal</button>
-          <button type="submit" className="btn btn-primary btn-cta" disabled={busy}>Pindahkan ke {STATUS[target].label}</button>
+          <button type="submit" className="btn btn-primary btn-cta" disabled={busy || blocked}>Pindahkan ke {STATUS[target].label}</button>
         </div>
       </form>
     </Modal>

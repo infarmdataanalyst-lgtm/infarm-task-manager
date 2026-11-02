@@ -11,7 +11,11 @@ import { db } from "./supabaseClient";
 import { fromRow, normalizeChecklistItem, normalizeTask, toRow } from "./taskModel";
 
 const BUCKET = "references";
-const LIST_LIMIT = 500;
+// Task yang belum Finish selalu dimuat semua; task Finish hanya FINISHED_LIMIT yang paling baru selesai.
+// Yang lebih lama tetap di database dan bisa ditemukan lewat pencarian (searchTasks).
+const FINISHED_LIMIT = 500;
+const ACTIVE_LIMIT = 1000; // batas aman (maks baris per permintaan Supabase)
+const SEARCH_LIMIT = 50;
 const SELECT_TASK = "*, checklist:task_checklist(*), workSessions:work_sessions(status, started_at, ended_at)";
 
 // ─── Pesan error yang bisa dipahami pengguna ────────────────────
@@ -19,7 +23,7 @@ const SELECT_TASK = "*, checklist:task_checklist(*), workSessions:work_sessions(
 function friendlyError(error) {
   const msg = `${error?.message || ""} ${error?.details || ""} ${error?.code || ""}`;
   if (msg.includes("tasks_pic_wajib")) return new Error("Pilih PIC dulu sebelum memindah task dari Request.");
-  if (msg.includes("tasks_link_hasil_wajib")) return new Error("Isi minimal satu link hasil desain.");
+  if (msg.includes("bukan_pic")) return new Error("Hanya PIC task ini atau admin yang bisa memulainya.");
   if (msg.includes("tasks_lampiran_maks")) return new Error("Maksimal 5 lampiran per request.");
   if (msg.includes("task_terhapus")) return new Error("Task ini sudah dihapus. Hanya admin yang bisa memulihkannya.");
   // Kolom/tabel/fungsi belum ada = schema.sql versi terbaru belum dijalankan di Supabase.
@@ -52,8 +56,11 @@ let refetchTimer = null;
 const notify = () => listeners.forEach((fn) => fn(cache));
 
 async function fetchAll() {
-  const rows = must(await db().from("tasks").select(SELECT_TASK).order("created_at", { ascending: false }).limit(LIST_LIMIT));
-  cache = rows.map(fromRow);
+  const [active, finished] = await Promise.all([
+    db().from("tasks").select(SELECT_TASK).neq("status", "finish").order("created_at", { ascending: false }).limit(ACTIVE_LIMIT),
+    db().from("tasks").select(SELECT_TASK).eq("status", "finish").order("finished_at", { ascending: false }).limit(FINISHED_LIMIT),
+  ]);
+  cache = [...must(active), ...must(finished)].map(fromRow);
   return cache;
 }
 
@@ -129,6 +136,25 @@ export async function listTasks() {
   if (cache) return cache;
   if (!loading) loading = fetchAll().finally(() => (loading = null));
   return loading;
+}
+
+// Cari di database (judul, brief, requester, divisi), untuk task Finish lama yang tidak dimuat di board.
+export async function searchTasks(query) {
+  // Karakter khusus filter PostgREST/LIKE dibuang; spasi tetap.
+  const q = String(query || "").replace(/[,()"'\\*%_:]/g, " ").trim();
+  if (q.length < 2) return [];
+  const p = `*${q}*`;
+  const rows = must(
+    await db()
+      .from("tasks")
+      .select(SELECT_TASK)
+      .eq("status", "finish")
+      .is("deleted_at", null)
+      .or(`title.ilike.${p},description.ilike.${p},requester_name.ilike.${p},division.ilike.${p}`)
+      .order("finished_at", { ascending: false })
+      .limit(SEARCH_LIMIT)
+  );
+  return rows.map(fromRow);
 }
 
 export async function getTask(id) {

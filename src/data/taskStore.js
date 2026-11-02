@@ -12,6 +12,7 @@ const impl = STORAGE_MODE === "supabase" ? remote : local;
 export const StorageFullError = local.StorageFullError;
 export const listTasks = (...a) => impl.listTasks(...a);
 export const getTask = (...a) => impl.getTask(...a);
+export const searchTasks = (...a) => impl.searchTasks(...a);
 export const subscribe = (...a) => impl.subscribe(...a);
 export const createTask = (...a) => impl.createTask(...a);
 export const updateTask = (...a) => impl.updateTask(...a);
