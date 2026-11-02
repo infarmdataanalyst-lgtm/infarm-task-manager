@@ -9,7 +9,7 @@ import { ArrowLeftRight, Clock, ExternalLink, Timer } from "lucide-react";
 import { helpers } from "../../data/taskModel";
 import { daysLate, fmtDayShort, fmtShort, isOverdue } from "../../lib/dates";
 import { displayUrl } from "../../lib/links";
-import { fmtDuration, isTimerRunning, taskWorkMinutes } from "../../lib/worktime";
+import { fmtDuration, isTimerRunning, taskTotalMinutes } from "../../lib/worktime";
 import { AttachmentStrip, Avatar } from "../../components/ui";
 
 export default function TaskCard({ task: t, isNew, now, designers, colorOf, busy, draggable, onTake, onMove, onDragStart, onDragEnd, dragging }) {
@@ -17,7 +17,7 @@ export default function TaskCard({ task: t, isNew, now, designers, colorOf, busy
   const late = isOverdue(t);
   const done = t.checklist.filter((c) => c.done).length;
   const others = helpers(t);
-  const minutes = taskWorkMinutes(t, now);
+  const minutes = taskTotalMinutes(t, now); // total sejak request masuk
   const running = isTimerRunning(t);
   const open = () => navigate(`/tim/task/${t.id}`);
   const stop = (fn) => (e) => {
@@ -50,17 +50,13 @@ export default function TaskCard({ task: t, isNew, now, designers, colorOf, busy
       <span className="task-sub">{t.requesterName} · {t.division}</span>
       <AttachmentStrip attachments={t.attachments} />
       {t.attachmentsDeletedAt && !t.attachments.length && <span className="small muted">Lampiran dihapus otomatis</span>}
-      {(t.pic || minutes > 0) && (
-        <div className="task-meta">
-          {t.pic && <span className="pic"><Avatar name={t.pic} color={colorOf(t.pic)} size={20} />{t.pic}</span>}
-          {others.length > 0 && <span>· bersama {others.join(", ")}</span>}
-          {(minutes > 0 || running) && (
-            <span className={`time ${running ? "running" : ""}`} title={running ? "Waktu kerja berjalan" : "Waktu kerja (jam kerja)"}>
-              <Timer size={13} aria-hidden="true" />{fmtDuration(minutes)}
-            </span>
-          )}
-        </div>
-      )}
+      <div className="task-meta">
+        {t.pic && <span className="pic"><Avatar name={t.pic} color={colorOf(t.pic)} size={20} />{t.pic}</span>}
+        {others.length > 0 && <span>· bersama {others.join(", ")}</span>}
+        <span className={`time ${running ? "running" : ""}`} title={`Total waktu sejak request masuk (jam kerja)${running ? ", masih berjalan" : ""}`}>
+          <Timer size={13} aria-hidden="true" />{fmtDuration(minutes)}
+        </span>
+      </div>
       {t.checklist.length > 0 && t.status !== "request" && (
         <div>
           <div className="progress" aria-hidden="true"><div style={{ width: `${Math.round((done / t.checklist.length) * 100)}%` }} /></div>

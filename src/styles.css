@@ -277,11 +277,12 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 /* ─── Pop-up detail, dialog, menu ────────────────────────── */
 
 .modal-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(26 26 26 / 0.45); }
-.modal { width: 100%; max-width: 520px; max-height: calc(100vh - 48px); overflow-y: auto; background: #fff; border-radius: 16px; box-shadow: var(--shadow-xl); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.modal { width: 100%; max-width: 520px; max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); overflow-y: auto; background: #fff; border-radius: 16px; box-shadow: var(--shadow-xl); padding: 22px; display: flex; flex-direction: column; gap: 16px; }
 .modal-head { display: flex; align-items: flex-start; gap: 12px; }
 .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
-.detail { max-width: 760px; height: min(920px, calc(100vh - 48px)); padding: 0; gap: 0; overflow: hidden; border-radius: 18px; }
+.detail { max-width: 760px; height: min(920px, calc(100vh - 48px)); height: min(920px, calc(100dvh - 48px)); padding: 0; gap: 0; overflow: hidden; border-radius: 18px; }
+.detail-topline { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .detail-head { padding: 18px 22px 14px; border-bottom: 1px solid var(--zinc-100); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
 .detail-icons { margin-left: auto; display: flex; gap: 6px; }
 .detail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 18px; }
@@ -292,6 +293,15 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .info-grid > div { background: var(--brand-surface); border-radius: 10px; padding: 8px 10px; min-width: 0; }
 .info-grid dt { font-size: 11px; color: var(--text-muted); }
 .info-grid dd { margin: 2px 0 0; font-weight: 700; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; }
+.time-grid { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.time-grid > div { border: 1px solid var(--zinc-200); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.time-grid dt { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.time-grid dt .dot { width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0; }
+.time-grid dd { margin: 2px 0 0; font-weight: 700; }
+.time-grid .running { border-color: var(--brand-primary); background: var(--brand-surface); }
+.time-grid .running dd { color: var(--brand-primary); }
+.time-grid .total { background: var(--brand-dark); border-color: var(--brand-dark); }
+.time-grid .total dt, .time-grid .total dd { color: #fff; }
 .history { display: flex; flex-direction: column; }
 .history li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--zinc-100); font-size: 12px; }
 .history .when { flex: 0 0 110px; color: var(--text-muted); }
@@ -307,7 +317,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .lightbox { position: fixed; inset: 0; z-index: 70; background: rgb(0 0 0 / 0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 10px; }
 .lightbox-stage { position: relative; display: flex; align-items: center; justify-content: center; width: min(100%, 1200px); min-height: 120px; padding: 0 64px; }
-.lightbox-stage img { max-width: min(100%, 1200px); max-height: calc(100vh - 200px); border-radius: 12px; display: block; }
+.lightbox-stage img { max-width: min(100%, 1200px); max-height: calc(100vh - 200px); max-height: calc(100dvh - 200px); border-radius: 12px; display: block; }
 .lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 9999px; border: 0; background: rgb(255 255 255 / 0.9); color: var(--text); display: inline-flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg); }
 .lightbox-nav:hover { background: #fff; }
 .lightbox-nav.prev { left: 0; }
@@ -399,10 +409,20 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .btn, .btn-sm, .btn-lg { min-height: 44px; }
   .btn-cta { min-height: 48px; font-size: 15px; }
   .modal-wrap { align-items: flex-end; padding: 0; }
-  .modal { max-width: none; border-radius: 16px 16px 0 0; max-height: 92vh; padding: 18px 16px 24px; }
+  .modal { max-width: none; border-radius: 16px 16px 0 0; max-height: 92vh; max-height: 92dvh; padding: 18px 16px calc(24px + env(safe-area-inset-bottom)); }
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; min-height: 48px; }
-  .detail { height: 100vh; max-height: 100vh; border-radius: 0; padding: 0; }
+  /* Pop-up detail di HP: setinggi layar yang terlihat (100% dari .modal-wrap yang fixed), bukan 100vh
+     yang di browser HP lebih tinggi dari layar sehingga tombol Tutup terdorong ke balik bilah alamat. */
+  .modal-wrap:has(.detail) { align-items: stretch; }
+  .detail { height: 100%; max-height: 100%; border-radius: 0; padding: 0; }
+  .detail-head { padding-top: 10px; padding-bottom: 10px; gap: 6px; }
+  .detail-head h2 { font-size: 16px !important; }
+  .detail-topline { flex-wrap: wrap; }
+  .detail-icons { order: -1; width: 100%; justify-content: flex-end; }
+  .detail-body { padding-top: 14px; padding-bottom: 20px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .time-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-head, .detail-body { padding-left: 16px; padding-right: 16px; }
   .detail-foot { padding: 12px 16px 16px; flex-direction: column-reverse; }
   .history .when { flex-basis: 86px; }

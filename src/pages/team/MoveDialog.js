@@ -1,7 +1,8 @@
 // Dialog "Pindah ke…": pilih kolom tujuan (maju atau mundur) beserta isian yang dibutuhkan.
 // - Dari Request ke kolom lain: pilih PIC dulu.
-// - Ke Delay: alasan (opsional), tampil di kartu. Waktu kerja berhenti.
-// - Ke Finish: link hasil wajib. Waktu kerja berhenti.
+// - Ke Delay: alasan (opsional), tampil di kartu.
+// - Ke Finish: link hasil wajib. Total waktu berhenti.
+// Waktu per kolom tercatat otomatis (lihat stageMinutes di lib/worktime.js).
 // - Ke Request: PIC dilepas; waktu yang sudah tercatat tetap disimpan.
 
 import React, { useState } from "react";
@@ -10,14 +11,14 @@ import { STATUS, STATUSES } from "../../config";
 import { moveTask } from "../../data/taskActions";
 import { newId } from "../../lib/images";
 import { normalizeUrl } from "../../lib/links";
-import { fmtDuration, taskWorkMinutes } from "../../lib/worktime";
+import { fmtDuration, stageMinutes } from "../../lib/worktime";
 import { Modal } from "../../components/ui";
 
 const NOTES = {
   request: "PIC dilepas; waktu yang sudah tercatat tetap disimpan",
-  on_progress: "Dikerjakan; waktu kerja berjalan",
-  delay: "Ditunda karena menunggu sesuatu; waktu kerja berhenti",
-  finish: "Wajib isi link hasil; waktu kerja berhenti",
+  on_progress: "Sedang dikerjakan",
+  delay: "Ditunda karena menunggu sesuatu",
+  finish: "Wajib isi link hasil; total waktu berhenti",
 };
 
 export default function MoveDialog({ task, initialTarget, designers, run, busy, onClose, onDone }) {
@@ -94,7 +95,7 @@ export default function MoveDialog({ task, initialTarget, designers, run, busy, 
           <div className="field">
             <label className="label" htmlFor="alasan">Alasan ditunda <span className="muted" style={{ fontWeight: 400 }}>(opsional)</span></label>
             <input id="alasan" className="input" value={reason} placeholder="Contoh: menunggu foto produk dari Bidev" onChange={(e) => setReason(e.target.value)} />
-            <p className="hint">Tampil di kartu. Waktu kerja berhenti selama di Delay dan lanjut saat kembali ke On Progress.</p>
+            <p className="hint">Tampil di kartu. Waktu di Delay dicatat terpisah dari waktu pengerjaan.</p>
           </div>
         )}
 
@@ -121,7 +122,10 @@ export default function MoveDialog({ task, initialTarget, designers, run, busy, 
             <button type="button" className="btn btn-text" style={{ alignSelf: "flex-start" }} onClick={() => setLinks([...links, { id: newId(), value: "" }])}>
               <Plus size={16} aria-hidden="true" /> Tambah link lain
             </button>
-            <p className="callout-cream">Waktu kerja berhenti di {fmtDuration(taskWorkMinutes(task))}.</p>
+            <p className="callout-cream">{(() => {
+              const t = stageMinutes(task);
+              return `Total waktu berhenti di ${fmtDuration(t.total)} (Request ${fmtDuration(t.request)} · On Progress ${fmtDuration(t.on_progress)} · Delay ${fmtDuration(t.delay)}).`;
+            })()}</p>
           </div>
         )}
 

@@ -53,10 +53,12 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - Finish → On Progress/Delay = **revisi**; waktu kerja melanjutkan total sebelumnya.
    - Ke Request: PIC dilepas; waktu yang sudah tercatat tetap disimpan.
 5. **Kerja bersama:** satu task bisa dikerjakan Denny dan Arum. PIC tetap satu (penanggung jawab: pindah kolom, isi link hasil). Tim membagi **checklist** di detail task; tiap item punya pengerja (`assignee`). Tidak ada link per item checklist; link referensi per task.
-6. **Waktu kerja (time tracking):**
-   - Dihitung hanya **jam kerja Senin–Jumat 08.00–17.00 WIB**, selama task di **On Progress**. Berhenti di Delay, Finish, dan Request; revisi menambah ke total.
-   - Tampil di kartu dan detail sebagai **jam dan menit**, mis. "20 jam 15 menit".
-   - **Task bersama:** satu durasi per task. Di analitik, durasi itu dihitung untuk PIC **dan** setiap pengerja checklist, dengan tanda "dikerjakan bersama".
+6. **Waktu (time tracking), diubah 2 Nov 2026:**
+   - Dimulai saat **request masuk** dan berhenti saat **Finish**. Dicatat **per kolom**: berapa lama di Request (menunggu diambil), di On Progress (dikerjakan), dan di Delay, plus **total**.
+   - Hanya **jam kerja Senin–Jumat 08.00–17.00 WIB** yang dihitung.
+   - Revisi (Finish → kolom lain) membuka waktu lagi dan menambah ke total. Kembali ke Request menambah waktu Request.
+   - Kartu: total (berjalan, hijau bila belum Finish). Detail: rincian Di Request · Di On Progress · Di Delay · Total. Export CSV: keempat angka dalam menit.
+   - Analitik "rata-rata pengerjaan" memakai waktu di On Progress. Task bersama: durasi dihitung untuk PIC **dan** setiap pengerja checklist.
    - Hari libur nasional belum diperhitungkan (bisa ditambah daftar libur nanti).
 7. **Lampiran dihapus otomatis 7 hari setelah Finish** (foto dan PDF, termasuk thumbnail). Baris task, link referensi, dan link hasil tetap ada; kartu menampilkan "Lampiran dihapus otomatis". Kalau task direvisi sebelum 7 hari, hitungan batal dan dimulai lagi saat Finish berikutnya.
 8. **Detail task = pop-up mengambang** di tengah layar (HP: layar penuh), dibuka dengan klik kartu.
@@ -107,7 +109,7 @@ npm run build    # build produksi ke /build (CI=true: warning ESLint dianggap er
 Environment variable (atur di Vercel → Settings → Environment Variables):
 
 - `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_PUBLISHABLE_KEY` (atau `REACT_APP_SUPABASE_ANON_KEY`): koneksi Supabase. Keduanya aman di browser. Jangan pernah memakai secret/service_role key di frontend.
-- Login Google: Client ID/Secret diatur di Supabase → Authentication → Sign In / Providers → Google (bukan di Vercel). Google Cloud memakai mode **Testing** + Test users (Gmail Denny, Arum, SPV); tombol Publish butuh homepage + privacy policy URL.
+- Login Google: Client ID/Secret diatur di Supabase → Authentication → Sign In / Providers → Google (bukan di Vercel). Bila Google Cloud dalam mode **Testing**, setiap Gmail anggota juga harus ada di **Test users** (kecuali pemilik proyek Google Cloud); bila **In production**, tidak perlu. Tombol Publish butuh homepage + privacy policy URL.
 - Anggota tim: `supabase/anggota-awal.sql` (sekali), lalu tabel `team_members`.
 
 Langkah menyiapkan Supabase untuk pemilik proyek: `docs/PANDUAN-SUPABASE.md`.
@@ -127,7 +129,7 @@ Belum ada test otomatis di repo. Uji manual minimal v8: kirim request dengan 2 f
   referenceLinks: [{ id, url }],
   resultLinks: [{ id, url }],            // wajib ≥1 saat finish
   checklist: [{ id, text, done, assignee, doneAt, position }],   // tabel task_checklist
-  workMinutes: number,                   // total menit jam kerja (dihitung dari work_sessions)
+  workSessions: [{ status: "request" | "on_progress" | "delay", startedAt, endedAt }],  // sesi waktu per kolom (lib/worktime.js: stageMinutes)
   createdAt, startedAt, finishedAt, attachmentsDeletedAt, deletedAt, updatedAt,
 }
 ```
@@ -136,7 +138,7 @@ Tabel Supabase v8:
 
 - `tasks`: kolom di atas (snake_case). Constraint: `tasks_pic_wajib`, `tasks_link_hasil_wajib`. `deleted_at`/`deleted_by` untuk arsip.
 - `task_checklist`: 1 baris per item (sudah ada di v7).
-- `work_sessions`: `task_id`, `started_at`, `ended_at` (null = sedang berjalan). Dibuka saat masuk On Progress, ditutup saat keluar. Menit dihitung hanya jam kerja Senin–Jumat 08.00–17.00 WIB (fungsi SQL, sama dengan fungsi JS untuk tampilan berjalan).
+- `work_sessions`: `task_id`, `status` (kolom: request/on_progress/delay), `started_at`, `ended_at` (null = sedang berjalan). Request baru membuka sesi `request`; setiap pindah kolom menutup sesi lama dan membuka sesi kolom baru; Finish hanya menutup. Menit dihitung hanya jam kerja Senin–Jumat 08.00–17.00 WIB (`work_minutes()` di SQL = `workMinutesBetween()` di JS). `schema.sql` melengkapi data lama sekali (waktu Request = `created_at` sampai `started_at`).
 - `task_history`: audit, ditulis trigger database. `actor_email`, `actor_name` (requester: nama dari form; otomatis: "sistem"), `action`, `changes [{field, before, after}]`. Tidak ada izin UPDATE/DELETE untuk siapa pun.
 - `task_reads`: `task_id`, `member_email`, `read_at` (badge "Baru" per akun).
 - `team_members`: `email` (Gmail), `name`, `role: "designer" | "admin"`, `active`, `color`.
@@ -146,7 +148,7 @@ Tidak ada migrasi v7 → v8: skema v7 tidak pernah dijalankan di database produk
 
 Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition` + `localStore.js`):
 - `tasks_before_update`: pindah ke Request → PIC dilepas; masuk On Progress pertama kali → `started_at`; masuk Finish → `finished_at`, keluar dari Finish → dikosongkan; selain Delay → `delay_reason` dikosongkan; arsip → `deleted_by`; task terarsip hanya bisa diubah admin.
-- `tasks_after_write`: buka/tutup `work_sessions`, tulis `task_history` (`dibuat` oleh requester, lalu `diambil`, `ditunda`, `dilanjutkan`, `selesai`, `revisi`, `dilepas`, `dipindah`, `diubah`, `dihapus`, `dipulihkan`, `lampiran_dihapus`).
+- `tasks_after_write`: buka/tutup `work_sessions` per kolom, tulis `task_history` (`dibuat` oleh requester, lalu `diambil`, `ditunda`, `dilanjutkan`, `selesai`, `revisi`, `dilepas`, `dipindah`, `diubah`, `dihapus`, `dipulihkan`, `lampiran_dihapus`).
 - `checklist_after_write`: riwayat `checklist` (lewati bila task-nya dihapus permanen).
 
 ## Aturan tata letak UI (v8, acuan: mockup)
@@ -215,6 +217,7 @@ src/config.js              CATEGORIES, DIVISIONS, STATUS(ES), batas lampiran, ko
 src/styles.css             semua style (token Infarm, komponen, responsive)
 supabase/schema.sql        skema v8: tabel, RLS, trigger (riwayat, sesi kerja, aturan kolom), work_minutes(), Storage, Realtime
 supabase/anggota-awal.sql  anggota awal (Gmail Denny, Arum, SPV) — diisi pemilik proyek, dijalankan sekali
+supabase/reset-anggota.sql ganti SEMUA anggota (mis. akun uji coba → akun asli); opsional kosongkan task uji coba
 docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Google + Vercel
 src/data/
   supabaseClient.js        satu klien Supabase (sesi login disimpan & diperbarui otomatis)
@@ -227,7 +230,7 @@ src/data/
   useTasks.js              hook React: daftar task yang ikut berubah otomatis
   useReads.js              hook React: penanda "sudah dilihat" per akun → isNew(task), markRead(id)
 src/lib/
-  worktime.js              waktu kerja jam kerja Sen–Jum 08–17 WIB (padanan work_minutes() di SQL), fmtDuration
+  worktime.js              jam kerja Sen–Jum 08–17 WIB (padanan work_minutes() di SQL), stageMinutes (per kolom + total), fmtDuration
   dates.js                 tanggal, overdue, tepat waktu, rentang periode analitik
   images.js                lampiran: kompres foto + thumbnail, cek PDF ≤5 MB, fmtBytes, newId
   links.js                 normalizeUrl, displayUrl
@@ -256,6 +259,8 @@ src/pages/
 - **Bucket `references` publik**: file bisa dibuka siapa pun yang tahu URL-nya (nama file UUID, tidak bisa ditebak; tidak bisa di-list oleh requester).
 - **Upload lampiran oleh requester** belum diuji di Supabase sungguhan (hanya di tiruan); cek pertama kali di preview.
 - **Libur nasional** belum dikecualikan dari waktu kerja.
+- **Data uji coba sebelum 2 Nov 2026**: waktu di Delay dari sebelum perubahan ini tidak tercatat (dulu hanya On Progress yang dicatat).
+- **Pop-up di HP** memakai tinggi layar yang terlihat (100% dari `.modal-wrap` / `dvh`), bukan `100vh`: di browser HP `100vh` lebih tinggi dari layar sehingga tombol Tutup terdorong ke balik bilah alamat.
 
 ## Integrasi Supabase
 

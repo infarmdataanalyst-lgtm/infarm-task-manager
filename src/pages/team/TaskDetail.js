@@ -11,7 +11,7 @@ import { describeEntry } from "../../lib/changes";
 import { daysLate, fmtDateTime, fmtDay, isOverdue } from "../../lib/dates";
 import { newId } from "../../lib/images";
 import { displayUrl, normalizeUrl } from "../../lib/links";
-import { fmtDuration, isTimerRunning, taskWorkMinutes } from "../../lib/worktime";
+import { fmtDuration, isTimerRunning, stageMinutes } from "../../lib/worktime";
 import { AttachmentList, Avatar, LinkList, Modal, StatusBadge } from "../../components/ui";
 
 function LinksEditor({ links, onChange, label }) {
@@ -185,7 +185,7 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
   }, [task.id]);
 
   const late = isOverdue(task);
-  const minutes = taskWorkMinutes(task, now);
+  const times = stageMinutes(task, now);
   const running = isTimerRunning(task);
   const others = helpers(task);
   const move = (status, message) => run(() => actions.moveTask(task.id, status), message);
@@ -194,7 +194,7 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
     <>
       <Modal labelledBy="detail-title" onClose={() => !confirmDelete && onClose()} className="detail">
         <div className="detail-head">
-          <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+          <div className="detail-topline">
             <StatusBadge status={task.status} />
             {late && <span className="badge badge-late">Terlambat {daysLate(task)} hari</span>}
             <span className={`tag ${late ? "tag-due late" : "tag-due"}`} style={{ marginLeft: 0 }}>Deadline {fmtDay(task.dueDate)}</span>
@@ -234,17 +234,30 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
                   <dd>{others.length ? others.map((n) => <span key={n} className="row" style={{ gap: 4 }}><Avatar name={n} color={colorOf(n)} size={22} />{n}</span>) : "-"}</dd>
                 </div>
                 <div>
-                  <dt>Waktu kerja</dt>
-                  <dd style={{ color: running ? "var(--brand-primary)" : undefined }}>
-                    {fmtDuration(minutes)}{running && <span className="small muted" style={{ fontWeight: 600 }}>· berjalan</span>}
-                  </dd>
+                  <dt>Diambil</dt>
+                  <dd>{fmtDateTime(task.startedAt)}</dd>
                 </div>
                 <div>
-                  <dt>{task.status === "finish" ? "Selesai" : "Mulai dikerjakan"}</dt>
-                  <dd>{fmtDateTime(task.status === "finish" ? task.finishedAt : task.startedAt)}</dd>
+                  <dt>Selesai</dt>
+                  <dd>{fmtDateTime(task.finishedAt)}</dd>
                 </div>
               </dl>
-              <p className="hint" style={{ marginTop: -10 }}>Waktu kerja dihitung Senin–Jumat 08.00–17.00 selama task di On Progress; berhenti di Delay dan Finish.</p>
+              <section className="stack" aria-label="Waktu per kolom">
+                <h3 className="eyebrow">Waktu {running ? "· berjalan" : ""}</h3>
+                <dl className="time-grid">
+                  {[["request", "Di Request"], ["on_progress", "Di On Progress"], ["delay", "Di Delay"]].map(([k, label]) => (
+                    <div key={k} className={running && task.status === k ? "running" : ""}>
+                      <dt><span className={`dot dot-${k}`} />{label}</dt>
+                      <dd>{fmtDuration(times[k])}</dd>
+                    </div>
+                  ))}
+                  <div className="total">
+                    <dt>Total sampai {task.status === "finish" ? "Finish" : "sekarang"}</dt>
+                    <dd>{fmtDuration(times.total)}</dd>
+                  </div>
+                </dl>
+                <p className="hint">Dihitung sejak request masuk sampai Finish, hanya jam kerja Senin–Jumat 08.00–17.00. Revisi menambah ke total.</p>
+              </section>
               {task.status === "delay" && task.delayReason && <p className="delay-note">Ditunda: {task.delayReason}</p>}
               <section className="stack">
                 <h3 className="eyebrow">Brief</h3>
@@ -300,7 +313,7 @@ export default function TaskDetail({ task, now, designers, colorOf, run, busy, o
                 </button>
               )}
               {task.status === "delay" && (
-                <button type="button" className="btn btn-primary btn-cta primary" disabled={busy} onClick={() => move("on_progress", "Dilanjutkan. Waktu kerja berjalan lagi.")}>
+                <button type="button" className="btn btn-primary btn-cta primary" disabled={busy} onClick={() => move("on_progress", "Dilanjutkan ke On Progress.")}>
                   <Play size={18} aria-hidden="true" /> Lanjutkan ({STATUS.on_progress.label})
                 </button>
               )}

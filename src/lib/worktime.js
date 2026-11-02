@@ -22,9 +22,23 @@ export function workMinutesBetween(start, end) {
   return Math.floor(ms / 60000);
 }
 
-// Total menit kerja task dari sesi-sesinya; sesi yang masih berjalan dihitung sampai `now`.
-export const taskWorkMinutes = (task, now = new Date()) =>
-  task.workSessions.reduce((sum, w) => sum + workMinutesBetween(w.startedAt, w.endedAt || now), 0);
+// Menit jam kerja per kolom, dari request masuk sampai Finish; sesi yang masih berjalan dihitung sampai `now`.
+// { request, on_progress, delay, total }. Revisi (Finish → kolom lain) menambah ke total.
+export function stageMinutes(task, now = new Date()) {
+  const out = { request: 0, on_progress: 0, delay: 0, total: 0 };
+  for (const w of task.workSessions) {
+    const m = workMinutesBetween(w.startedAt, w.endedAt || now);
+    out[w.status] = (out[w.status] || 0) + m;
+    out.total += m;
+  }
+  return out;
+}
+
+// Total menit dari request masuk sampai Finish (semua kolom).
+export const taskTotalMinutes = (task, now = new Date()) => stageMinutes(task, now).total;
+
+// Menit pengerjaan saja (On Progress), dipakai analitik "rata-rata waktu kerja".
+export const taskWorkMinutes = (task, now = new Date()) => stageMinutes(task, now).on_progress;
 
 export const isTimerRunning = (task) => task.workSessions.some((w) => !w.endedAt);
 

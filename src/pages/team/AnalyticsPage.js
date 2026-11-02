@@ -49,7 +49,7 @@ export default function AnalyticsPage() {
           hint: finished.length ? `${Math.round((onTime / finished.length) * 100)}%` : "belum ada task selesai",
           color: "var(--brand-primary)",
         },
-        { label: "Rata-rata waktu kerja", value: avgWork(finished), hint: "jam kerja Sen–Jum 08–17 per task" },
+        { label: "Rata-rata pengerjaan", value: avgWork(finished), hint: "waktu di On Progress per task (jam kerja)" },
         { label: "Sedang terlambat", value: tasks.filter(isOverdue).length, hint: "task aktif lewat deadline (saat ini)", color: "var(--rose-700)" },
       ],
       // Task bersama dihitung untuk PIC dan setiap pengerja checklist.
