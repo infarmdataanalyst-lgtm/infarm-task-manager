@@ -48,6 +48,7 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - **Finish:** **link hasil opsional** (sejak 2 Nov 2026). Waktu kerja berhenti.
    - **Terlambat** (lewat deadline) bukan kolom: badge merah di kolom mana pun kecuali Finish.
    - **Urutan kartu:** deadline terdekat paling atas (Request, On Progress, Delay). Finish: yang terakhir selesai paling atas.
+   - **10 kartu per halaman di setiap kolom** (4 Nov 2026, `PAGE_SIZE` di `BoardPage.js`). Kolom berisi > 10 kartu: tombol ‹ › di bawah kartu ke-10 + "1–10 dari 23 · Halaman 1 dari 3". Angka di kepala kolom tetap total. Halaman tiap kolom berdiri sendiri; kembali ke halaman 1 saat cari/filter berubah; banner "Lihat" membuka Request halaman 1. Setelah memindah kartu (geser, "Pindah ke…", "Mulai kerjakan"), kolom tujuan otomatis membuka halaman tempat kartu itu berada. Desktop: tiap kolom setinggi layar dan bisa di-scroll sendiri.
 4. **Pindah kolom maju dan mundur** lewat **geser kartu** (desktop) dan tombol **"Pindah ke…"** (desktop dan HP):
    - Dari Request ke kolom lain: hanya PIC atau admin (lihat di atas).
    - Ke Finish: dialog link hasil (opsional).
@@ -173,7 +174,8 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 6. **Desktop dan HP memakai komponen yang sama**; HP hanya beda ukuran sentuh (44px) dan susunan menumpuk. Dialog di HP muncul dari bawah dengan tombol utama di atas.
 7. **Lebar konten:** halaman tim 1400px, form request 1040px (halaman terkirim 760px).
 8. **Skala:** teks 13px, judul 15–18px, angka 20px; tombol 36px (HP 44px), CTA 42px (HP 48px), input 38px (HP 44px).
-9. **Warna:** hijau Infarm untuk aksi utama dan status aktif; soil/cream untuk Arum dan label kategori; merah hanya untuk Terlambat/Hapus. Kolom: Request abu-abu · On Progress soil · Delay amber · Finish hijau. Lampiran di kartu: foto cream, PDF merah muda. Status selalu ada label teks, bukan hanya warna.
+9. **Halaman kolom:** tombol ‹ › 36px (HP 44px), › hijau, nonaktif abu-abu; keterangan di tengah.
+10. **Warna:** hijau Infarm untuk aksi utama dan status aktif; soil/cream untuk Arum dan label kategori; merah hanya untuk Terlambat/Hapus. Kolom: Request abu-abu · On Progress soil · Delay amber · Finish hijau. Lampiran di kartu: foto cream, PDF merah muda. Status selalu ada label teks, bukan hanya warna.
 
 ## Pola dan konvensi kode
 
