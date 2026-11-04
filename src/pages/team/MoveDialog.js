@@ -56,7 +56,7 @@ export default function MoveDialog({ task, initialTarget, designers, member, run
       extra.resultLinks = filled;
     }
     const ok = await run(() => moveTask(task.id, target, extra), `Dipindah ke ${STATUS[target].label}.`);
-    if (ok) onDone();
+    if (ok) onDone(target);
   };
 
   return (

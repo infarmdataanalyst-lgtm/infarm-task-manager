@@ -7,12 +7,35 @@ import { STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
 import { canLeaveRequest, involves, notPicMessage } from "../../data/taskModel";
 import { daysBetween, isOverdue, parseDay, today } from "../../lib/dates";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Avatar, useAction, useNow } from "../../components/ui";
 import TaskCard from "./TaskCard";
 import TaskDetail from "./TaskDetail";
 import MoveDialog from "./MoveDialog";
 
 const FINISH_WINDOW_DAYS = 30;
+// Setiap kolom menampilkan maksimal PAGE_SIZE kartu; sisanya lewat tombol ‹ › di bawah kolom.
+const PAGE_SIZE = 10;
+const FIRST_PAGES = { request: 0, on_progress: 0, delay: 0, finish: 0 };
+
+function Pager({ label, page, pages, total, onPage }) {
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+  return (
+    <nav className="pager" aria-label={`Halaman kolom ${label}`}>
+      <button type="button" className="pager-btn" aria-label="10 task sebelumnya" disabled={page === 0} onClick={() => onPage(page - 1)}>
+        <ChevronLeft size={18} aria-hidden="true" />
+      </button>
+      <div className="pager-info" aria-live="polite">
+        <strong>{from}–{to} dari {total}</strong>
+        <span className="small muted">Halaman {page + 1} dari {pages}</span>
+      </div>
+      <button type="button" className="pager-btn primary" aria-label="10 task berikutnya" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+        <ChevronRight size={18} aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}
 
 // Pencarian: judul, brief, nama requester, dan divisi (tidak peka huruf besar/kecil, cocok sebagian).
 const matchesQuery = (t, q) => [t.title, t.description, t.requesterName, t.division].some((v) => (v || "").toLowerCase().includes(q));
@@ -45,6 +68,13 @@ export default function BoardPage() {
   const [moving, setMoving] = useState(null); // { task, target }
   const [dragId, setDragId] = useState(null);
   const [dropCol, setDropCol] = useState(null);
+  const [pages, setPages] = useState(FIRST_PAGES);
+  const [follow, setFollow] = useState(null); // { id, status }: buka halaman tempat kartu yang baru dipindah
+  const bodyRefs = useRef({});
+  const goPage = useCallback((status, page) => {
+    setPages((p) => ({ ...p, [status]: page }));
+    bodyRefs.current[status]?.scrollTo?.({ top: 0 });
+  }, []);
   const draggable = useMemo(canDrag, []);
 
   // Task Finish lama yang tidak dimuat board: dari pencarian database dan dari link langsung.
@@ -91,8 +121,9 @@ export default function BoardPage() {
   useEffect(() => {
     if (!focusAt) return;
     setActiveCol("request");
+    goPage("request", 0);
     kanbanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [focusAt]);
+  }, [focusAt, goPage]);
   const closeDetail = useCallback(() => navigate("/tim"), [navigate]);
   const isDesigner = member.role === "designer";
 
@@ -130,13 +161,33 @@ export default function BoardPage() {
     } else {
       items.sort(byDue);
     }
-    return { status: s, items, hidden };
+    const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+    const page = Math.min(pages[s] || 0, pageCount - 1);
+    return { status: s, items, total: items.length, hidden, page, pageCount, visible: items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) };
   });
+
+  // Cari/filter berubah: semua kolom kembali ke halaman 1.
+  useEffect(() => {
+    setPages(FIRST_PAGES);
+  }, [q, mine, pic, due, showAllFinished]);
+
+  // Setelah memindah kartu: kolom tujuan membuka halaman tempat kartu itu berada.
+  useEffect(() => {
+    if (!follow) return;
+    const col = columns.find((c) => c.status === follow.status);
+    const index = col ? col.items.findIndex((t) => t.id === follow.id) : -1;
+    if (index < 0) return;
+    setFollow(null);
+    setActiveCol(follow.status);
+    if (Math.floor(index / PAGE_SIZE) !== col.page) goPage(follow.status, Math.floor(index / PAGE_SIZE));
+  }, [follow, columns, goPage]);
 
   const filtersActive = query || mine || pic !== "all" || due !== "all";
 
   const assign = (t, name) => run(() => actions.assignPic(t.id, name), `PIC "${t.title}": ${name}. Task tetap di Request sampai ${name} memulainya.`);
-  const start = (t) => run(() => actions.startTask(t.id), `"${t.title}" mulai dikerjakan. Waktu On Progress berjalan.`);
+  const start = async (t) => {
+    if (await run(() => actions.startTask(t.id), `"${t.title}" mulai dikerjakan. Waktu On Progress berjalan.`)) setFollow({ id: t.id, status: "on_progress" });
+  };
 
   // Geser kartu: pindah langsung bila tidak perlu isian; selain itu buka dialog dengan tujuan terpilih.
   const drop = (status) => {
@@ -148,7 +199,7 @@ export default function BoardPage() {
     if (leaving && t.pic && !canLeaveRequest(t, member)) return showToast(notPicMessage(t.pic), "error");
     const needsDialog = status === "finish" || status === "delay" || (leaving && !t.pic);
     if (needsDialog) setMoving({ task: t, target: status });
-    else run(() => actions.moveTask(t.id, status), `Dipindah ke ${STATUS[status].label}.`);
+    else run(() => actions.moveTask(t.id, status), `Dipindah ke ${STATUS[status].label}.`).then((ok) => ok && setFollow({ id: t.id, status }));
   };
 
   return (
@@ -221,11 +272,11 @@ export default function BoardPage() {
               <span className={`dot dot-${c.status}`} style={{ width: 10, height: 10, borderRadius: 9999, display: "inline-block" }} />
               <span style={{ fontWeight: 700 }}>{STATUS[c.status].label}</span>
               <span className="small muted">{STATUS[c.status].note}</span>
-              <span className="count">{c.items.length}</span>
+              <span className="count">{c.total}</span>
             </div>
-            <div className="column-body">
-              {c.items.length === 0 && <p className="column-empty">{filtersActive ? "Tidak ada yang cocok dengan filter." : "Kosong"}</p>}
-              {c.items.map((t) => (
+            <div className="column-body" ref={(el) => (bodyRefs.current[c.status] = el)}>
+              {c.total === 0 && <p className="column-empty">{filtersActive ? "Tidak ada yang cocok dengan filter." : "Kosong"}</p>}
+              {c.visible.map((t) => (
                 <TaskCard
                   key={t.id}
                   task={t}
@@ -245,6 +296,7 @@ export default function BoardPage() {
                   onMove={(task) => setMoving({ task })}
                 />
               ))}
+              {c.pageCount > 1 && <Pager label={STATUS[c.status].label} page={c.page} pages={c.pageCount} total={c.total} onPage={(n) => goPage(c.status, n)} />}
               {c.status === "finish" && (c.hidden > 0 || showAllFinished) && (
                 <button type="button" className="btn btn-text" onClick={() => setShowAllFinished(!showAllFinished)}>
                   {showAllFinished ? `Tampilkan ${FINISH_WINDOW_DAYS} hari terakhir saja` : `Lihat ${c.hidden} task selesai lainnya`}
@@ -289,7 +341,10 @@ export default function BoardPage() {
           run={run}
           busy={busy}
           onClose={() => setMoving(null)}
-          onDone={() => setMoving(null)}
+          onDone={(status) => {
+            setFollow({ id: moving.task.id, status });
+            setMoving(null);
+          }}
         />
       )}
     </>
