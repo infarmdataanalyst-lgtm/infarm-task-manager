@@ -58,3 +58,42 @@ export function rangeLabel(range) {
   const start = sameMonth ? String(range.from.getDate()) : fmt(range.from, range.from.getFullYear() !== end.getFullYear());
   return `${start} – ${fmt(end, true)}`;
 }
+
+// ─── Untuk grafik dan tooltip ───────────────────────────────────
+
+// Jumlah hari dalam rentang (Minggu ini = 7, Bulan ini = 28–31).
+export const dayCount = (range) => Math.round((startOfDay(new Date(range.to.getTime() - 1)) - startOfDay(range.from)) / DAY) + 1;
+
+// Hari ke-berapa (0 = hari pertama rentang) untuk sebuah waktu.
+export const dayIndex = (iso, range) => Math.floor((startOfDay(new Date(iso)) - startOfDay(range.from)) / DAY);
+
+// Tanggal hari ke-i dalam rentang.
+export const dayAt = (range, i) => addDays(startOfDay(range.from), i);
+
+const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const short = (d) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+const shortDay = (d) => DAY_NAMES[d.getDay()].slice(0, 3);
+
+// Judul tooltip untuk satu kelompok grafik, mis. "Rabu, 4 Nov 2026" (minggu) atau "Minggu ke-2 · 8–14 Nov" (bulan).
+export function bucketTitle(range, unit, i) {
+  if (unit === "week") {
+    const d = dayAt(range, i);
+    return `${DAY_NAMES[d.getDay()]}, ${d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
+  }
+  const first = new Date(range.from.getFullYear(), range.from.getMonth(), i * 7 + 1);
+  const lastDay = Math.min(i * 7 + 7, dayCount(range));
+  const last = new Date(range.from.getFullYear(), range.from.getMonth(), lastDay);
+  return `Minggu ke-${i + 1} · ${first.getDate()}–${short(last)}`;
+}
+
+// Label pendek kelompok pembanding, mis. "Rab, 28 Okt" (minggu) atau "Mg 2" (bulan).
+export function bucketShort(range, unit, i) {
+  if (unit === "week") {
+    const d = dayAt(range, i);
+    return `${shortDay(d)}, ${short(d)}`;
+  }
+  return `Mg ${i + 1}`;
+}
+
+// Tanggal panjang untuk tooltip grafik garis, mis. "Rabu, 4 Nov 2026".
+export const longDate = (d) => `${DAY_NAMES[d.getDay()]}, ${d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
