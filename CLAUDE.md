@@ -74,7 +74,11 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
 11. **Pencarian** di bagian paling atas board (search bar di header hijau): judul, brief, nama requester, dan divisi; tidak peka huruf besar/kecil, cocok sebagian. Saat mencari (≥2 huruf) board juga mencari ke database (`searchTasks`) sehingga task Finish lama yang tidak dimuat tetap ketemu (label "Dari arsip lama"); hasil Finish saat mencari tidak dibatasi 30 hari.
 12. **Analitik per orang:** task selesai, persen tepat waktu, rata-rata waktu kerja per task (On Progress), rata-rata menunggu dikerjakan (Request sampai On Progress), jumlah masuk Delay. Bisa dibandingkan dengan **minggu lalu** atau **bulan lalu** (naik/turun ditampilkan, hijau = membaik, merah = memburuk).
     - Periode: **Minggu ini** · **Bulan ini** saja (`lib/periods.js`, diubah 2 Nov 2026). Selalu periode penuh vs periode penuh tepat sebelumnya: Minggu ini 2–8 Nov vs 26 Okt – 1 Nov; Bulan ini 1–30 Nov vs 1–31 Okt. Minggu = Senin–Minggu, bulan = kalender. Karena periode ini masih berjalan, tampil keterangan "periode masih berjalan, hari ke-n dari 7/30".
-    - Grafik per orang: task selesai per hari (minggu) atau per minggu (bulan), batang periode ini vs pembanding.
+    - Urutan halaman (5 Nov 2026): periode → ringkasan tim → **"Kinerja tiap desainer"** (kartu per orang) → **"Perbandingan antar desainer"** → per kategori/divisi.
+    - Kartu per orang: grafik batang task selesai per hari (minggu) atau per minggu (bulan), periode ini vs pembanding, dengan sumbu angka, angka di atas batang, dan ikon (i) penjelasan di tiap angka.
+    - Perbandingan antar desainer: (1) grafik garis task selesai per hari, satu garis per desainer (garis ke-2 putus-putus), 7 titik / 28–31 titik, hari yang belum lewat tidak digambar; (2) ketepatan waktu, batang horizontal 0–100%; (3) rata-rata waktu per task, batang horizontal bertumpuk Menunggu dikerjakan + Pengerjaan + Ditunda (jam kerja).
+    - **Semua rata-rata waktu (pengerjaan, menunggu dikerjakan, ditunda) dihitung dari task yang selesai di periode itu**, jadi bagian batang bertumpuk bisa dijumlah.
+    - **Tooltip** di semua grafik dan ikon (i): hover/fokus keyboard (desktop), ketuk (HP). Isi tooltip batang: tanggal, periode ini vs pembanding, selisih, judul task (maks 5 + "N lainnya").
 13. **Halaman Anggota (admin):** tambah Gmail + nama + peran + warna; ubah peran/warna; nonaktifkan (langsung tidak bisa masuk); hapus hanya untuk anggota nonaktif. Akun sendiri tidak bisa diturunkan/dinonaktifkan dari UI, dan database menolak bila tidak tersisa admin aktif (`team_members_admin_guard`, pesan `admin_terakhir`). Nama tidak bisa diubah (dipakai sebagai PIC).
 14. **Edit lampiran oleh tim:** di pop-up detail ("Tambah lampiran", ikon hapus per file dengan konfirmasi). Batas tetap 5 file; file dihapus juga dari Storage; tercatat di riwayat.
 
@@ -167,7 +171,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 3. **Urutan halaman tim:**
    - Kanban: tab Kanban · Analitik (admin: + Audit · Anggota) → 5 chip angka (Request, On Progress, Delay, Terlambat, Selesai 30 hari) → filter (Tugas saya/Semua, PIC, deadline) → 4 kolom Kanban (HP: satu kolom, dipilih lewat tombol kolom).
    - HP: tab diganti **menu bawah** (Kanban · Analitik · Akun; admin: Kanban · Analitik · Admin).
-   - Analitik: tab → periode + pembanding (minggu lalu / bulan lalu) → kartu per orang → per kategori/divisi.
+   - Analitik: tab → periode → ringkasan tim → Kinerja tiap desainer → Perbandingan antar desainer → per kategori/divisi.
    - Di HP, chip angka jadi satu baris yang bisa digeser.
 4. **Anatomi kartu:** badge (Baru / Terlambat) + deadline di kanan → judul → kategori · requester (divisi) → lampiran mini (maks 3 thumbnail + "+2", PDF sebagai ikon) → PIC + "bersama …" → waktu kerja → progres checklist → aksi (Request tanpa PIC: "Tentukan PIC" + tombol Arum/Denny; Request ber-PIC: "Mulai kerjakan" (PIC/admin) + "Ganti PIC ke …"; lainnya: "Pindah ke…").
 5. **Detail pop-up:** maks 760px di tengah dengan latar redup (HP: layar penuh). Kanan atas: Edit (hijau), Hapus (merah), Tutup (abu-abu). Aksi pindah kolom di bawah.
