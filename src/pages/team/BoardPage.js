@@ -7,8 +7,7 @@ import { STATUS, STATUSES } from "../../config";
 import * as actions from "../../data/taskActions";
 import { canLeaveRequest, involves, notPicMessage } from "../../data/taskModel";
 import { daysBetween, isOverdue, parseDay, today } from "../../lib/dates";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Avatar, useAction, useNow } from "../../components/ui";
+import { Avatar, Pager, useAction, useNow } from "../../components/ui";
 import TaskCard from "./TaskCard";
 import TaskDetail from "./TaskDetail";
 import MoveDialog from "./MoveDialog";
@@ -17,25 +16,6 @@ const FINISH_WINDOW_DAYS = 30;
 // Setiap kolom menampilkan maksimal PAGE_SIZE kartu; sisanya lewat tombol ‹ › di bawah kolom.
 const PAGE_SIZE = 10;
 const FIRST_PAGES = { request: 0, on_progress: 0, delay: 0, finish: 0 };
-
-function Pager({ label, page, pages, total, onPage }) {
-  const from = page * PAGE_SIZE + 1;
-  const to = Math.min(total, (page + 1) * PAGE_SIZE);
-  return (
-    <nav className="pager" aria-label={`Halaman kolom ${label}`}>
-      <button type="button" className="pager-btn" aria-label="10 task sebelumnya" disabled={page === 0} onClick={() => onPage(page - 1)}>
-        <ChevronLeft size={18} aria-hidden="true" />
-      </button>
-      <div className="pager-info" aria-live="polite">
-        <strong>{from}–{to} dari {total}</strong>
-        <span className="small muted">Halaman {page + 1} dari {pages}</span>
-      </div>
-      <button type="button" className="pager-btn primary" aria-label="10 task berikutnya" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
-        <ChevronRight size={18} aria-hidden="true" />
-      </button>
-    </nav>
-  );
-}
 
 // Pencarian: judul, brief, nama requester, dan divisi (tidak peka huruf besar/kecil, cocok sebagian).
 const matchesQuery = (t, q) => [t.title, t.description, t.requesterName, t.division].some((v) => (v || "").toLowerCase().includes(q));
@@ -296,7 +276,7 @@ export default function BoardPage() {
                   onMove={(task) => setMoving({ task })}
                 />
               ))}
-              {c.pageCount > 1 && <Pager label={STATUS[c.status].label} page={c.page} pages={c.pageCount} total={c.total} onPage={(n) => goPage(c.status, n)} />}
+              {c.pageCount > 1 && <Pager label={`kolom ${STATUS[c.status].label}`} unit="task" pageSize={PAGE_SIZE} page={c.page} pages={c.pageCount} total={c.total} onPage={(n) => goPage(c.status, n)} />}
               {c.status === "finish" && (c.hidden > 0 || showAllFinished) && (
                 <button type="button" className="btn btn-text" onClick={() => setShowAllFinished(!showAllFinished)}>
                   {showAllFinished ? `Tampilkan ${FINISH_WINDOW_DAYS} hari terakhir saja` : `Lihat ${c.hidden} task selesai lainnya`}

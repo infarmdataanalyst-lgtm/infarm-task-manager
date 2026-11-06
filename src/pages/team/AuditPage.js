@@ -1,13 +1,21 @@
 // /tim/audit — admin: semua perubahan di semua task (ditulis otomatis oleh database, tidak bisa diubah
 // siapa pun) dan daftar task terhapus yang bisa dipulihkan.
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { RotateCcw, Search } from "lucide-react";
 import * as actions from "../../data/taskActions";
 import { ACTION_LABEL, describeEntry } from "../../lib/changes";
 import { fmtDateTime } from "../../lib/dates";
-import { Avatar, useAction } from "../../components/ui";
+import { Avatar, Pager, useAction } from "../../components/ui";
+
+// Daftar perubahan dan task terhapus ditampilkan 30 baris per halaman.
+const PAGE_SIZE = 30;
+const pageOf = (list, page) => {
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const p = Math.min(page, pages - 1);
+  return { page: p, pages, rows: list.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE) };
+};
 
 const RANGES = [
   ["7", "7 hari terakhir"],
@@ -35,6 +43,15 @@ export default function AuditPage() {
   const [actor, setActor] = useState("all");
   const [action, setAction] = useState("all");
   const [range, setRange] = useState("7");
+  const [logPage, setLogPage] = useState(0);
+  const [deletedPage, setDeletedPage] = useState(0);
+  const listRef = useRef(null);
+  // Filter berubah: kembali ke halaman 1.
+  useEffect(() => setLogPage(0), [q, actor, action, range]);
+  const goPage = (setter) => (n) => {
+    setter(n);
+    listRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
 
   // Ambil ulang setiap kali ada task yang berubah (riwayat baru ditulis database).
   const version = useMemo(() => allTasks.reduce((m, t) => (t.updatedAt > m ? t.updatedAt : m), ""), [allTasks]);
@@ -66,6 +83,8 @@ export default function AuditPage() {
         (!query || h.taskTitle.toLowerCase().includes(query))
     );
   }, [entries, q, actor, action, range]);
+  const log = pageOf(filtered, logPage);
+  const del = pageOf(deleted, deletedPage);
 
   return (
     <>
@@ -97,10 +116,10 @@ export default function AuditPage() {
             </select>
           </div>
 
-          <section className="card audit-list" aria-label="Daftar perubahan">
+          <section className="card audit-list" aria-label="Daftar perubahan" ref={listRef}>
             {entries === null && <p className="column-empty" style={{ margin: 12 }}>Memuat…</p>}
             {entries !== null && filtered.length === 0 && <p className="column-empty" style={{ margin: 12 }}>Tidak ada perubahan yang cocok.</p>}
-            {filtered.map((h) => {
+            {log.rows.map((h) => {
               const d = describeEntry(h);
               const flag = flagOf(h);
               return (
@@ -121,12 +140,14 @@ export default function AuditPage() {
               );
             })}
           </section>
+          {log.pages > 1 && <Pager label="daftar perubahan" unit="baris" pageSize={PAGE_SIZE} page={log.page} pages={log.pages} total={filtered.length} onPage={goPage(setLogPage)} />}
           <p className="hint">Riwayat ditulis otomatis oleh database dan tidak bisa diubah atau dihapus siapa pun, termasuk admin. Menampilkan 500 perubahan terbaru.</p>
         </>
       ) : (
-        <section className="card audit-list" aria-label="Task terhapus">
+        <>
+        <section className="card audit-list" aria-label="Task terhapus" ref={listRef}>
           {deleted.length === 0 && <p className="column-empty" style={{ margin: 12 }}>Tidak ada task terhapus.</p>}
-          {deleted.map((t) => (
+          {del.rows.map((t) => (
             <div key={t.id} className="deleted-row">
               <span className="grow">
                 <strong>{t.title}</strong> <span className="muted">({t.division})</span>
@@ -138,6 +159,8 @@ export default function AuditPage() {
             </div>
           ))}
         </section>
+        {del.pages > 1 && <Pager label="task terhapus" unit="task" pageSize={PAGE_SIZE} page={del.page} pages={del.pages} total={deleted.length} onPage={goPage(setDeletedPage)} />}
+        </>
       )}
     </>
   );
