@@ -255,3 +255,23 @@ export function LinkList({ links, emptyText }) {
     </div>
   );
 }
+
+// Tombol halaman ‹ › + "1–10 dari 23 · Halaman 1 dari 3". Dipakai kolom Kanban (10) dan halaman Audit (30).
+export function Pager({ label, unit, pageSize, page, pages, total, onPage }) {
+  const from = page * pageSize + 1;
+  const to = Math.min(total, (page + 1) * pageSize);
+  return (
+    <nav className="pager" aria-label={`Halaman ${label}`}>
+      <button type="button" className="pager-btn" aria-label={`${pageSize} ${unit} sebelumnya`} disabled={page === 0} onClick={() => onPage(page - 1)}>
+        <ChevronLeft size={18} aria-hidden="true" />
+      </button>
+      <div className="pager-info" aria-live="polite">
+        <strong>{from}–{to} dari {total}</strong>
+        <span className="small muted">Halaman {page + 1} dari {pages}</span>
+      </div>
+      <button type="button" className="pager-btn primary" aria-label={`${pageSize} ${unit} berikutnya`} disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>
+        <ChevronRight size={18} aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}

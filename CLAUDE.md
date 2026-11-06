@@ -252,7 +252,7 @@ src/lib/
   csv.js                   export CSV (RFC 4180 + BOM untuk Excel)
   changes.js               teks riwayat (aksi + perubahan field)
 src/components/
-  ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Modal, Lightbox (galeri, bisa digeser), AttachmentStrip/List, LinkList, useToast, useAction, useNow
+  ui.js                    AppHeader, LocalModeBanner, StatusBadge, Avatar, Modal, Pager (tombol halaman ‹ ›), Lightbox (galeri, bisa digeser), AttachmentStrip/List, LinkList, useToast, useAction, useNow
   ReferenceEditor.js       input lampiran (foto + PDF, maks 5) + link referensi di form
 src/pages/
   RequestPage.js           "/" form request + "Request sudah masuk"
@@ -277,7 +277,7 @@ src/pages/
 - **Upload lampiran oleh requester** belum diuji di Supabase sungguhan (hanya di tiruan); cek pertama kali di preview.
 - **Libur nasional** belum dikecualikan dari waktu kerja.
 - **Kode lebih baru dari database:** bila `schema.sql` terbaru belum dijalankan (mis. kolom `work_sessions.status` dari 2 Nov 2026), daftar task gagal dimuat. Board menampilkan banner merah "Daftar task gagal dimuat… jalankan ulang supabase/schema.sql" + Coba lagi (bukan board kosong). Setiap PR yang mengubah `schema.sql`: jalankan ulang di Supabase sebelum merge.
-- **Halaman Audit menampilkan 500 perubahan terbaru** (filter berjalan di browser). Tambahkan paginasi/filter di server bila riwayat sudah sangat banyak.
+- **Halaman Audit memuat 500 perubahan terbaru** (filter berjalan di browser) dan menampilkannya **30 baris per halaman** dengan tombol ‹ › (6 Nov 2026; tab Task terhapus juga 30 per halaman; kembali ke halaman 1 saat filter berubah). Tambahkan pengambilan per halaman dari server bila riwayat sudah sangat banyak.
 - **Menghapus anggota tidak mengubah task-nya:** `tasks.pic` dan `assignee` checklist menyimpan nama, jadi task milik anggota yang dihapus tetap ada dengan nama lama (avatar abu-abu). Ganti PIC lewat detail task. Lebih aman menonaktifkan daripada menghapus.
 - **Data uji coba sebelum 2 Nov 2026**: waktu di Delay dari sebelum perubahan ini tidak tercatat (dulu hanya On Progress yang dicatat).
 - **Pop-up di HP** memakai tinggi layar yang terlihat (100% dari `.modal-wrap` / `dvh`), bukan `100vh`: di browser HP `100vh` lebih tinggi dari layar sehingga tombol Tutup terdorong ke balik bilah alamat.
