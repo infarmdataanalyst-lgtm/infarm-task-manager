@@ -29,6 +29,7 @@ export const fmtDay = (ymd) => (ymd ? fmt(parseDay(ymd), { day: "numeric", month
 export const fmtDayShort = (ymd) => (ymd ? fmt(parseDay(ymd), { day: "numeric", month: "short" }) : "-");
 export const fmtDate = (iso) => (iso ? fmt(iso, { day: "numeric", month: "short", year: "numeric" }) : "-");
 export const fmtShort = (iso) => (iso ? fmt(iso, { day: "numeric", month: "short" }) : "-");
+export const fmtLongDate = (date) => (date ? fmt(date, { day: "numeric", month: "long", year: "numeric" }) : "-");
 export const fmtDateTime = (iso) =>
   iso
     ? new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })

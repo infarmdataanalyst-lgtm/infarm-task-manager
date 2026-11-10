@@ -4,11 +4,11 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { ArrowLeftRight, Check, Paperclip, Pencil, Play, RotateCcw, Trash2, X } from "lucide-react";
-import { CATEGORIES, DIVISIONS, MAX_ATTACHMENTS, STATUS } from "../../config";
+import { ATTACHMENT_RETENTION_DAYS, CATEGORIES, DIVISIONS, MAX_ATTACHMENTS, STATUS } from "../../config";
 import * as actions from "../../data/taskActions";
-import { canLeaveRequest, helpers, notPicMessage } from "../../data/taskModel";
+import { attachmentsDeleteDate, canLeaveRequest, helpers, notPicMessage } from "../../data/taskModel";
 import { describeEntry } from "../../lib/changes";
-import { daysLate, fmtDateTime, fmtDay, isOverdue } from "../../lib/dates";
+import { daysLate, fmtDateTime, fmtDay, fmtLongDate, isOverdue } from "../../lib/dates";
 import { newId, prepareAttachment } from "../../lib/images";
 import { displayUrl, normalizeUrl } from "../../lib/links";
 import { fmtDuration, isTimerRunning, stageMinutes } from "../../lib/worktime";
@@ -122,6 +122,10 @@ function Attachments({ task, run, busy }) {
       </div>
       <input ref={fileRef} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,application/pdf,.pdf"
         onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+      {(() => {
+        const on = attachmentsDeleteDate(task, ATTACHMENT_RETENTION_DAYS);
+        return on && <p className="attach-expiry">Lampiran akan dihapus otomatis {fmtLongDate(on)} ({ATTACHMENT_RETENTION_DAYS} hari setelah {task.deletedAt ? "dihapus" : "selesai"}). Simpan file yang masih dibutuhkan sebelum tanggal itu.</p>;
+      })()}
       <AttachmentList task={task} onRemove={setConfirm} />
       {confirm && (
         <Modal labelledBy="hapus-lampiran" onClose={() => setConfirm(null)}>

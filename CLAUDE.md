@@ -63,7 +63,10 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - Kartu: total (berjalan, hijau bila belum Finish). Detail: rincian Di Request · Di On Progress · Di Delay · Total. Export CSV: keempat angka dalam menit.
    - Analitik "rata-rata pengerjaan" memakai waktu di On Progress. Task bersama: durasi dihitung untuk PIC **dan** setiap pengerja checklist.
    - Hari libur nasional belum diperhitungkan (bisa ditambah daftar libur nanti).
-7. **Lampiran dihapus otomatis 7 hari setelah Finish** (foto dan PDF, termasuk thumbnail). Baris task, link referensi, dan link hasil tetap ada; kartu menampilkan "Lampiran dihapus otomatis". Kalau task direvisi sebelum 7 hari, hitungan batal dan dimulai lagi saat Finish berikutnya.
+7. **Lampiran dihapus otomatis 30 hari setelah Finish** (diubah dari 7 hari, 10 Nov 2026; `ATTACHMENT_RETENTION_DAYS` di `config.js` = `RETENTION_DAYS` di Edge Function). Foto, thumbnail, dan PDF. Juga 30 hari setelah task diarsipkan, dan file yatim (folder Storage tanpa task) > 1 hari. Baris task, link referensi, link hasil, checklist, waktu kerja tetap ada; riwayat `lampiran_dihapus` oleh "sistem".
+   - Sebelum dihapus: kartu dan detail menampilkan "Lampiran akan dihapus otomatis 10 Desember 2026" (`attachmentsDeleteDate` di `taskModel.js`). Sesudah: "Lampiran dihapus otomatis".
+   - Kalau task direvisi sebelum 30 hari, hitungan dimulai lagi dari Finish berikutnya. Lampiran baru yang ditambahkan setelah penghapusan mengosongkan lagi `attachments_deleted_at` (trigger).
+   - Mekanisme: Supabase Edge Function `supabase/functions/hapus-lampiran/index.ts` (hapus file lewat Storage API, lalu update task dengan service role) dijalankan Supabase Cron setiap hari 18.00 UTC (01.00 WIB). Dipasang manual lewat dashboard: `docs/PANDUAN-SUPABASE.md` bagian 7.
 8. **Detail task = pop-up mengambang** di tengah layar (HP: layar penuh), dibuka dengan klik kartu.
    - Kanan atas: ikon **hijau Edit**, **merah Hapus** (dengan konfirmasi), **abu-abu Tutup**.
    - Isi: info request, lampiran, link referensi, checklist per orang, link hasil, waktu kerja, riwayat task, aksi pindah kolom.
@@ -106,7 +109,7 @@ Pakai React Router (path asli) + rewrite di `vercel.json`.
 - Penyimpanan: **Supabase** (`@supabase/supabase-js`) bila `REACT_APP_SUPABASE_URL` + key diatur; kalau tidak, **mode uji coba** `localStorage`. Pemilihan otomatis di `src/data/taskStore.js`.
 - Login: **Supabase Auth (Google)**. Mode uji coba: akun tiruan (`LOCAL_MEMBERS` di `config.js`).
 - Geser kartu: **HTML5 drag and drop bawaan** (tanpa pustaka), hanya desktop dengan mouse. HP, layar sentuh, dan keyboard memakai tombol "Pindah ke…".
-- Tahap 3 (belum): tugas terjadwal harian untuk menghapus lampiran (Supabase Edge Function terjadwal; file Storage harus dihapus lewat Storage API, bukan `delete from storage.objects`).
+- Hapus lampiran otomatis: Supabase Edge Function `hapus-lampiran` (Deno) + Supabase Cron harian. File Storage dihapus lewat Storage API, bukan `delete from storage.objects`. Kode function ada di repo tetapi di-deploy manual lewat dashboard (tidak ada CI Supabase).
 - `api/request.js`: Vercel Serverless Function lama untuk Google Apps Script. Tidak dipakai frontend dan tidak menyimpan data.
 
 ## Perintah
@@ -158,7 +161,7 @@ Tabel Supabase v8:
 Tidak ada migrasi v7 → v8: skema v7 tidak pernah dijalankan di database produksi (proyek Supabase dibuat baru untuk v8). `schema.sql` v8 ditulis untuk database baru dan aman dijalankan ulang.
 
 Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition` + `localStore.js`):
-- `tasks_before_update`: keluar dari Request hanya oleh PIC/admin (`bukan_pic`); masuk On Progress pertama kali → `started_at`; masuk Finish → `finished_at`, keluar dari Finish → dikosongkan; selain Delay → `delay_reason` dikosongkan; arsip → `deleted_by`; task terarsip hanya bisa diubah admin.
+- `tasks_before_update`: task terarsip hanya bisa diubah admin atau sistem (tanpa email: Edge Function/SQL Editor); lampiran baru → `attachments_deleted_at` dikosongkan; keluar dari Request hanya oleh PIC/admin (`bukan_pic`); masuk On Progress pertama kali → `started_at`; masuk Finish → `finished_at`, keluar dari Finish → dikosongkan; selain Delay → `delay_reason` dikosongkan; arsip → `deleted_by`; task terarsip hanya bisa diubah admin.
 - `tasks_after_write`: buka/tutup `work_sessions` per kolom, tulis `task_history` (`dibuat` oleh requester, `pic_ditentukan`/`pic_dilepas` (ganti PIC di Request), `diambil` (= mulai dikerjakan), `ditunda`, `dilanjutkan`, `selesai`, `revisi`, `dilepas`, `dipindah`, `diubah`, `dihapus`, `dipulihkan`, `lampiran_dihapus`).
 - `checklist_after_write`: riwayat `checklist` (lewati bila task-nya dihapus permanen).
 
@@ -198,7 +201,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 - **Tahap 1 (sudah):** skema v8 + RLS + trigger, login Google + `team_members`, form `/` foto + PDF maks 5 + thumbnail, board 4 kolom (urut deadline), geser kartu + "Pindah ke…", tombol Arum/Denny di kartu Request, pop-up detail (Edit/Hapus/Tutup), checklist per orang, waktu kerja jam kerja, riwayat di detail, hapus = arsip, pencarian judul, filter Tugas saya/PIC/deadline, menu bawah HP.
 - **Tahap 2 (sudah):** analitik per orang + pembanding minggu/bulan lalu, halaman Audit (admin, termasuk pulihkan task terhapus), halaman Anggota (admin), edit lampiran oleh tim.
 - **Sudah ditarik dari tahap 3:** banner + kartu "Baru" per akun (`task_reads`).
-- **Tahap 3:** penghapusan lampiran otomatis 7 hari setelah Finish, (opsional) halaman `/privasi` untuk Publish di Google.
+- **Tahap 3:** penghapusan lampiran otomatis 30 hari setelah Finish (kode sudah, 10 Nov 2026; perlu dipasang di dashboard Supabase), (opsional, belum) halaman `/privasi` untuk Publish di Google.
 
 ## Dari v7 ke v8 (ringkasan perubahan)
 
@@ -208,7 +211,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 | Requester | Halaman status publik `/` + edit `/request/:id/edit` | Hanya form `/`; tidak bisa melihat/mengedit |
 | Kolom | Request, Todo, On Progress, Finish | Request, On Progress, Delay, Finish |
 | Pindah kolom | Tombol per tahap | Geser kartu + "Pindah ke…" (maju/mundur) |
-| Lampiran | Gambar saja, maks 6, hapus manual saat Finish | Gambar + PDF, maks 5, thumbnail, hapus otomatis 7 hari setelah Finish |
+| Lampiran | Gambar saja, maks 6, hapus manual saat Finish | Gambar + PDF, maks 5, thumbnail, hapus otomatis 30 hari setelah Finish |
 | Detail | Panel kanan 480px | Pop-up tengah + ikon Edit/Hapus/Tutup |
 | Riwayat | actor "requester"/"tim" | Akun Google pelaku, semua perubahan, tidak bisa diubah; halaman audit admin |
 | Hapus task | Permanen | Arsip, bisa dipulihkan admin |
@@ -230,6 +233,7 @@ src/config.js              CATEGORIES, DIVISIONS, STATUS(ES), batas lampiran, ko
 src/styles.css             semua style (token Infarm, komponen, responsive)
 supabase/schema.sql        skema v8: tabel, RLS, trigger (riwayat, sesi kerja, aturan kolom), work_minutes(), Storage, Realtime
 supabase/anggota-awal.sql  anggota awal (Gmail Denny, Arum, SPV) — diisi pemilik proyek, dijalankan sekali
+supabase/functions/hapus-lampiran/index.ts  Edge Function harian: hapus lampiran 30 hari setelah Finish/arsip + file yatim
 supabase/reset-anggota.sql ganti SEMUA anggota (mis. akun uji coba → akun asli); opsional kosongkan task uji coba
 docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Google + Vercel
 src/data/
@@ -271,8 +275,9 @@ src/pages/
 - **Mode uji coba** (tanpa env Supabase): data hanya di browser; banner "Mode uji coba" tampil; login memakai akun tiruan (tanpa keamanan). PDF > 1 MB tidak disimpan isinya.
 - **Board memuat semua task yang belum Finish + 500 task Finish yang paling baru selesai** (`FINISHED_LIMIT` di `supabaseStore.js`). Task Finish yang lebih lama tidak dihapus: tetap di database, bisa ditemukan lewat pencarian dan dibuka lewat link `/tim/task/:id`. Analitik dan Export CSV hanya memakai task yang dimuat.
 - **Realtime mengambil ulang seluruh daftar** setiap ada perubahan (jeda 300 ms). Cukup untuk volume tim.
-- **File yatim** bisa tersisa jika upload berhasil tapi simpan task gagal. Penghapus lampiran terjadwal v8 sebaiknya juga membersihkan file tanpa task.
-- **Supabase Free dijeda** setelah 7 hari tanpa aktivitas; tugas terjadwal ikut berhenti selama dijeda.
+- **File yatim** bisa tersisa jika upload berhasil tapi simpan task gagal; dibersihkan oleh `hapus-lampiran` setelah > 1 hari (maks 1000 folder per jalan).
+- **Supabase Free dijeda** setelah 7 hari tanpa aktivitas; Cron `hapus-lampiran-harian` ikut berhenti selama dijeda, lalu mengejar di jadwal berikutnya.
+- **Mode uji coba** (localStorage) tidak menjalankan penghapusan otomatis; hanya keterangan tanggalnya yang tampil.
 - **Bucket `references` publik**: file bisa dibuka siapa pun yang tahu URL-nya (nama file UUID, tidak bisa ditebak; tidak bisa di-list oleh requester).
 - **Upload lampiran oleh requester** belum diuji di Supabase sungguhan (hanya di tiruan); cek pertama kali di preview.
 - **Libur nasional** belum dikecualikan dari waktu kerja.

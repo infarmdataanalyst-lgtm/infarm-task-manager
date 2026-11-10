@@ -256,8 +256,14 @@ security definer
 set search_path = public
 as $$
 begin
-  if old.deleted_at is not null and not public.is_admin() then
+  -- Task terarsip hanya bisa diubah admin, atau oleh sistem (tanpa akun: Edge Function hapus-lampiran / SQL Editor).
+  if old.deleted_at is not null and not public.is_admin() and public.current_email() <> '' then
     raise exception 'task_terhapus' using errcode = '42501';
+  end if;
+  -- Lampiran baru ditambahkan setelah lampiran lama dihapus otomatis: hitungan hapus otomatis berlaku lagi.
+  if new.attachments is distinct from old.attachments and jsonb_array_length(new.attachments) > 0
+     and new.attachments_deleted_at is not distinct from old.attachments_deleted_at then
+    new.attachments_deleted_at := null;
   end if;
   if old.deleted_at is not null and new.deleted_at is null then
     new.deleted_by := null;
