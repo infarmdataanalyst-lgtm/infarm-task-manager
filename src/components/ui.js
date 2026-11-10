@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link as LinkIcon, X } from "lucide-react";
-import { STATUS, STORAGE_MODE } from "../config";
+import { ATTACHMENT_RETENTION_DAYS, STATUS, STORAGE_MODE } from "../config";
 import { displayUrl } from "../lib/links";
 import { fmtBytes } from "../lib/images";
 
@@ -212,7 +212,7 @@ export function AttachmentList({ task, onRemove }) {
   const [zoom, setZoom] = useState(null); // indeks foto yang dibuka
   const photos = task.attachments.filter((a) => a.type !== "pdf" && a.url);
   if (!task.attachments.length) {
-    return <p className="empty-box">{task.attachmentsDeletedAt ? "Lampiran sudah dihapus otomatis setelah task selesai." : "Tidak ada lampiran."}</p>;
+    return <p className="empty-box">{task.attachmentsDeletedAt ? `Lampiran sudah dihapus otomatis ${ATTACHMENT_RETENTION_DAYS} hari setelah task selesai.` : "Tidak ada lampiran."}</p>;
   }
   return (
     <div className="file-grid">
