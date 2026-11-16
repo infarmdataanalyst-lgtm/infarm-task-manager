@@ -473,7 +473,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .bar-num { font-size: 10px; font-weight: 700; line-height: 14px; height: 14px; }
 .bar-num.muted { font-weight: 500; }
 .x-labels { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; display: flex; gap: 6px; font-size: 11px; color: var(--text-muted); }
-.x-labels span { flex: 1; text-align: center; }
+.x-labels span { flex: 1; text-align: center; white-space: nowrap; }
 .x-labels.positioned span { position: absolute; transform: translateX(-50%); flex: none; }
 .line-area svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .line-area { position: absolute; top: 0; bottom: 0; left: 2%; right: 2%; }
@@ -607,4 +607,40 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .bottom-nav a, .bottom-nav button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-decoration: none; background: none; border: 0; min-height: 44px; justify-content: center; }
   .bottom-nav .active { color: var(--brand-primary); font-weight: 700; }
   .bottom-nav.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ─── Analitik: pilih tanggal ────────────────────────────── */
+.range-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.range-panel { max-width: 460px; display: flex; flex-direction: column; gap: 14px; }
+.preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.preset-chip { min-height: 32px; padding: 0 12px; border-radius: 9999px; border: 1px solid var(--zinc-200); background: #fff; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.preset-chip[aria-pressed="true"] { border-color: var(--brand-primary); background: #e3f5e3; color: var(--brand-primary); }
+.range-summary { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--brand-surface); font-size: 12px; color: var(--zinc-700); }
+.bar-groups.dense { gap: 2px; }
+.bar-groups.dense .bar-slot { width: 42%; }
+@media (max-width: 720px) {
+  .preset-chip { min-height: 40px; }
+  .filter-bar .segmented { flex-wrap: wrap; }
+}
+
+/* ─── Cetak / simpan PDF (halaman Analitik) ──────────────── */
+.print-only { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .app-header, .new-banner, .tabs, .bottom-nav, .local-banner, .load-error, .no-print, .info-btn, .chart-tip, .toast, .modal-wrap { display: none !important; }
+  .print-only { display: flex !important; }
+  .print-head { flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 2px solid var(--brand-primary); }
+  .print-head strong { font-family: var(--font-heading); font-size: 18px; }
+  .container.page { max-width: none; padding: 0 !important; gap: 12px; zoom: 0.72; }
+  nav.tabs, nav.segmented { display: none !important; }
+  .card, .stat, .compare-grid > *, .grid-auto-340 > * { break-inside: avoid; box-shadow: none !important; }
+  .section-head { break-after: avoid; }
+  .print-new-page { break-before: page; }
+  .stats { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)) !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+  .grid-auto-340 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .compare-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) !important; }
+  .chart-with-legend { grid-template-columns: minmax(0, 1fr) auto !important; }
+  .chart-legend.vertical { flex-direction: column !important; }
+  .bar-group:hover, .bar-group.active { background: transparent !important; }
 }

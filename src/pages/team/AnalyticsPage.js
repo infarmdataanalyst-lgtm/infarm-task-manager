@@ -4,14 +4,17 @@
 // Semua grafik punya tooltip: hover/fokus keyboard di desktop, ketuk di HP.
 // Task bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu memakai jam kerja (lib/worktime.js).
 
-import React, { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
-import { Info } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useOutletContext, useSearchParams } from "react-router-dom";
+import { CalendarDays, Info, Printer, X } from "lucide-react";
 import { CATEGORIES, DIVISIONS } from "../../config";
 import { finishedOnTime } from "../../lib/dates";
-import { bucketLabels, bucketOf, bucketShort, bucketTitle, comparePeriods, dayAt, dayCount, dayIndex, longDate, PERIODS, rangeLabel, within } from "../../lib/periods";
+import { bucketLabels, bucketOf, bucketShort, bucketTitle, comparePeriods, customPeriods, dayAt, dayCount, dayIndex, longDate, PERIODS, rangeError, rangeLabel, rangePresets, toYmd, within } from "../../lib/periods";
+import { STORAGE_MODE } from "../../config";
+import * as actions from "../../data/taskActions";
+import { fmtLongDate } from "../../lib/dates";
 import { fmtDuration, stageMinutes, WORKDAY_MINUTES } from "../../lib/worktime";
-import { Avatar } from "../../components/ui";
+import { Avatar, Modal } from "../../components/ui";
 
 const involved = (t, name) => t.pic === name || t.checklist.some((c) => c.assignee === name);
 const avg = (list, fn) => (list.length ? Math.round(list.reduce((s, x) => s + fn(x), 0) / list.length) : null);
@@ -108,6 +111,7 @@ function Metric({ label, value, d, info }) {
 // Grafik batang per orang: periode ini vs pembanding, sumbu angka, angka di atas batang, tooltip per kelompok.
 function DayBars({ cur, prev, labels, titles, prevTitles, tasksByBucket, color, cmp }) {
   const [tip, bind] = useTip();
+  const dense = labels.length > 14; // banyak batang: angka cukup di tooltip, label tanggal tiap 5
   const { top, ticks } = niceTicks(Math.max(...cur, ...prev));
   const h = (v) => `${(v / top) * 100}%`;
   const barH = (v) => `calc((100% - 14px) * ${v / top})`; // kolom batang 14px lebih tinggi untuk angka di atasnya
@@ -120,16 +124,16 @@ function DayBars({ cur, prev, labels, titles, prevTitles, tasksByBucket, color, 
         <div className="plot">
           <div className="plot-area">
           {ticks.map((v) => <span key={v} className={`grid-line ${v ? "" : "base"}`} style={{ bottom: h(v) }} aria-hidden="true" />)}
-          <div className="bar-groups">
+          <div className={`bar-groups ${dense ? "dense" : ""}`}>
             {labels.map((l, i) => (
               <button key={l} type="button" className={`bar-group ${tip === i ? "active" : ""}`} {...bind(i)}
                 aria-label={`${titles[i]}: ${cur[i]} task selesai, ${cmp.prevLabel} ${prev[i]}`}>
                 <span className="bar-slot">
-                  <span className="bar-num muted">{prev[i] || ""}</span>
+                  <span className="bar-num muted">{!dense && (prev[i] || "")}</span>
                   <span className="bar prev" style={{ height: barH(prev[i]) }} />
                 </span>
                 <span className="bar-slot">
-                  <span className="bar-num" style={{ color }}>{cur[i] || ""}</span>
+                  <span className="bar-num" style={{ color }}>{!dense && (cur[i] || "")}</span>
                   <span className="bar" style={{ height: barH(cur[i]), background: color }} />
                 </span>
                 {tip === i && (
@@ -157,7 +161,7 @@ function DayBars({ cur, prev, labels, titles, prevTitles, tasksByBucket, color, 
           </div>
           </div>
           <div className="x-labels" aria-hidden="true">
-            {labels.map((l) => <span key={l}>{l}</span>)}
+            {labels.map((l, i) => <span key={l}>{!dense || i % 5 === 0 ? l : ""}</span>)}
           </div>
         </div>
       </div>
@@ -195,8 +199,12 @@ function DailyLines({ people, cmp }) {
   const x = (i) => (days === 1 ? 50 : (i / (days - 1)) * 100);
   const y = (v) => (v / top) * 100;
   const showDots = days <= 7;
-  const labelEvery = days <= 7 ? 1 : 5;
-  const dayLabel = (i) => (days <= 7 ? ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"][i] : String(i + 1));
+  const labelEvery = days <= 7 ? 1 : days <= 31 ? 5 : Math.ceil(days / 8);
+  const dayLabel = (i) => {
+    const d = dayAt(cmp.current, i);
+    if (days <= 7) return `${["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"][d.getDay()]} ${d.getDate()}`;
+    return days <= 31 ? String(d.getDate()) : d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  };
   return (
     <div className="chart-with-legend">
       <div className="chart-plot with-axis tall">
@@ -393,13 +401,116 @@ function BreakdownBars({ list }) {
   ));
 }
 
+// Panel "Pilih tanggal": pilihan cepat + dari/sampai. Desktop: melayang di bawah tombol; HP: lembar dari bawah.
+function RangePanel({ initial, onApply, onClose }) {
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const presets = useMemo(() => rangePresets(), []);
+  const error = rangeError(from, to);
+  const preview = !error ? customPeriods(from, to) : null;
+  return (
+    <Modal labelledBy="pilih-tanggal" onClose={onClose} className="range-panel">
+      <div className="modal-head">
+        <h2 id="pilih-tanggal" className="h-section grow">Pilih tanggal laporan</h2>
+        <button type="button" className="icon-btn icon-btn-close" aria-label="Tutup" onClick={onClose}><X size={18} /></button>
+      </div>
+      <div className="stack">
+        <p className="eyebrow">Pilihan cepat</p>
+        <div className="preset-chips">
+          {presets.map((p) => (
+            <button key={p.key} type="button" className="preset-chip" aria-pressed={p.from === from && p.to === to} onClick={() => { setFrom(p.from); setTo(p.to); }}>{p.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="grid-2 keep">
+        <div className="field">
+          <label className="label" htmlFor="r-dari">Dari tanggal</label>
+          <input id="r-dari" type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="r-sampai">Sampai tanggal</label>
+          <input id="r-sampai" type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+        </div>
+      </div>
+      {error ? (
+        <p className="error-text" role="alert">{error}</p>
+      ) : (
+        <p className="range-summary">
+          <strong>{preview.progress.days} hari</strong> ({rangeLabel(preview.current)}), grafik {preview.unit === "days" ? "per hari" : "per minggu"}.
+          <br />Dibandingkan dengan {preview.progress.days} hari sebelumnya: {rangeLabel(preview.previous)}.
+        </p>
+      )}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-neutral" onClick={onClose}>Batal</button>
+        <button type="button" className="btn btn-primary" disabled={!!error} onClick={() => onApply(from, to)}>Terapkan</button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function AnalyticsPage() {
-  const { tasks, designers } = useOutletContext();
-  const [period, setPeriod] = useState("this_week");
-  const cmp = useMemo(() => comparePeriods(period), [period]);
-  const labels = bucketLabels(cmp.unit);
+  const { tasks: loadedTasks, designers, exportRef } = useOutletContext();
+  // Periode: ?periode=bulan, atau rentang pilihan ?dari=YYYY-MM-DD&sampai=YYYY-MM-DD (link laporan bisa dibagikan).
+  const [params, setParams] = useSearchParams();
+  const dari = params.get("dari");
+  const sampai = params.get("sampai");
+  const isCustom = !!dari && !!sampai && !rangeError(dari, sampai);
+  const period = isCustom ? "custom" : params.get("periode") === "bulan" ? "this_month" : "this_week";
+  const [panelOpen, setPanelOpen] = useState(false);
+  const cmp = useMemo(() => (isCustom ? customPeriods(dari, sampai) : comparePeriods(period)), [isCustom, dari, sampai, period]);
+  const labels = useMemo(() => bucketLabels(cmp.unit, cmp.current), [cmp]);
   const opts = { prevLabel: cmp.prevLabel };
-  const unitWord = cmp.unit === "week" ? "hari" : "minggu";
+  const unitWord = cmp.unit === "week" || cmp.unit === "days" ? "hari" : "minggu";
+  const choose = (key) => setParams(key === "this_month" ? { periode: "bulan" } : {});
+  const applyRange = (from, to) => {
+    setParams({ dari: from, sampai: to });
+    setPanelOpen(false);
+  };
+
+  // Rentang lama: board hanya memuat task aktif + 500 Finish terbaru, jadi ambil task di rentang itu langsung dari database.
+  const [extra, setExtra] = useState([]);
+  useEffect(() => {
+    if (!isCustom || STORAGE_MODE !== "supabase") return setExtra([]);
+    let alive = true;
+    actions.listTasksBetween(cmp.previous.from.toISOString(), cmp.current.to.toISOString())
+      .then((list) => alive && setExtra(list))
+      .catch(() => alive && setExtra([]));
+    return () => {
+      alive = false;
+    };
+  }, [isCustom, cmp]);
+  const tasks = useMemo(() => {
+    if (!extra.length) return loadedTasks;
+    const ids = new Set(loadedTasks.map((t) => t.id));
+    return [...loadedTasks, ...extra.filter((t) => !ids.has(t.id) && !t.deletedAt)];
+  }, [loadedTasks, extra]);
+
+  // Export CSV di header: task yang masuk atau selesai di periode terpilih.
+  useEffect(() => {
+    if (!exportRef) return undefined;
+    exportRef.current = {
+      label: `analitik ${rangeLabel(cmp.current)}`,
+      filename: `infarm-analitik-${toYmd(cmp.current.from)}_${toYmd(new Date(cmp.current.to.getTime() - 1))}.csv`,
+      tasks: () => tasks.filter((t) => within(t.createdAt, cmp.current) || within(t.finishedAt, cmp.current)).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+    };
+    return () => {
+      exportRef.current = null;
+    };
+  }, [exportRef, tasks, cmp]);
+
+  // Cetak / simpan PDF: judul dokumen = nama file PDF.
+  useEffect(() => {
+    const original = document.title;
+    const before = () => (document.title = `Laporan analitik tim desain ${rangeLabel(cmp.current)}`);
+    const after = () => (document.title = original);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => {
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
+      document.title = original;
+    };
+  }, [cmp]);
 
   const team = useMemo(() => ({ cur: measure(tasks, cmp.current), prev: measure(tasks, cmp.previous) }), [tasks, cmp]);
 
@@ -445,16 +556,34 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <div className="filter-bar">
+      <div className="print-only print-head">
+        <strong>Laporan analitik tim desain · {rangeLabel(cmp.current)}</strong>
+        <span>Dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel}) · dicetak {fmtLongDate(new Date())}</span>
+      </div>
+      <div className="filter-bar no-print">
         <div className="segmented" role="group" aria-label="Periode">
           {PERIODS.map((p) => (
-            <button key={p.key} type="button" aria-pressed={period === p.key} onClick={() => setPeriod(p.key)}>{p.label}</button>
+            <button key={p.key} type="button" aria-pressed={period === p.key} onClick={() => choose(p.key)}>{p.label}</button>
           ))}
+          <button type="button" aria-pressed={isCustom} aria-haspopup="dialog" onClick={() => setPanelOpen(true)} className="range-btn">
+            <CalendarDays size={15} aria-hidden="true" /> {isCustom ? rangeLabel(cmp.current) : "Pilih tanggal"}
+          </button>
         </div>
-        <span className="small muted">
-          {rangeLabel(cmp.current)} dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel}) · periode masih berjalan, hari ke-{cmp.progress.day} dari {cmp.progress.days}
+        <span className="small muted grow">
+          {rangeLabel(cmp.current)}{cmp.custom ? ` (${cmp.progress.days} hari)` : ""} dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel})
+          {cmp.progress.running && ` · periode masih berjalan, hari ke-${cmp.progress.day} dari ${cmp.progress.days}`}
         </span>
+        <button type="button" className="btn btn-outline" onClick={() => window.print()}>
+          <Printer size={16} aria-hidden="true" /> Cetak / simpan PDF
+        </button>
       </div>
+      {panelOpen && (
+        <RangePanel
+          initial={isCustom ? { from: dari, to: sampai } : rangePresets()[0]}
+          onApply={applyRange}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
 
       <section aria-label="Ringkasan tim" className="stats">
         {[
@@ -501,8 +630,8 @@ export default function AnalyticsPage() {
               <p className="legend small muted">
                 <span><i style={{ background: p.color }} /> Periode ini</span>
                 <span><i className="prev" /> {cmp.prevLabel[0].toUpperCase() + cmp.prevLabel.slice(1)}</span>
-                <span className="hide-mobile">Arahkan kursor ke batang untuk melihat angkanya</span>
-                <span className="show-mobile">Ketuk batang untuk melihat angkanya</span>
+                <span className="hide-mobile no-print">Arahkan kursor ke batang untuk melihat angkanya</span>
+                <span className="show-mobile no-print">Ketuk batang untuk melihat angkanya</span>
               </p>
             </div>
           </article>
@@ -512,7 +641,7 @@ export default function AnalyticsPage() {
 
       {people.length > 0 && (
         <>
-          <div className="section-head">
+          <div className="section-head print-new-page">
             <h2 className="h-section">Perbandingan antar desainer</h2>
             <p className="small muted">{people.map((p) => p.name).join(" dan ")} dalam satu grafik, periode yang sama</p>
           </div>

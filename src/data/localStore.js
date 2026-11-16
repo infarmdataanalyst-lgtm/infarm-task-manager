@@ -136,6 +136,11 @@ export async function createTask(input) {
   return task;
 }
 
+// Mode uji coba memuat semua task; tidak ada data di luar daftar.
+export async function listTasksBetween() {
+  return [];
+}
+
 // Mode uji coba memuat semua task, jadi tidak ada arsip lama yang perlu dicari di luar daftar.
 export async function searchTasks() {
   return [];

@@ -40,6 +40,9 @@ export const listHistory = (id) => store.listHistory(id);
 export const searchTasks = (query) => store.searchTasks(query);
 export const getTask = (id) => store.getTask(id);
 
+// Analitik rentang pilihan: task yang masuk atau selesai di rentang (ISO), termasuk yang tidak dimuat board.
+export const listTasksBetween = (fromIso, toIso) => store.listTasksBetween(fromIso, toIso);
+
 // Halaman Audit (admin): semua riwayat lintas task.
 export const listAllHistory = (limit) => store.listAllHistory(limit);
 
