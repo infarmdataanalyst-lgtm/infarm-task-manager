@@ -33,7 +33,57 @@ export function comparePeriods(key, now = new Date()) {
   }
   const days = Math.round((current.to - current.from) / DAY);
   const day = Math.floor((startOfDay(now) - current.from) / DAY) + 1;
-  return { unit: p.unit, current, previous, prevLabel, progress: { day, days } };
+  return { unit: p.unit, current, previous, prevLabel, progress: { day, days, running: true } };
+}
+
+// ─── Rentang tanggal pilihan (laporan mingguan, dll.) ───────────
+
+export const MAX_CUSTOM_DAYS = 366;
+const pad = (n) => String(n).padStart(2, "0");
+export const toYmd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export const parseYmd = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return d.getMonth() === +m[2] - 1 ? d : null;
+};
+
+// Cek rentang dari URL/isian: null bila valid, selain itu pesan kesalahan.
+export function rangeError(fromYmd, toYmd) {
+  const from = parseYmd(fromYmd);
+  const to = parseYmd(toYmd);
+  if (!from || !to) return "Isi tanggal mulai dan tanggal akhir.";
+  if (to < from) return "Tanggal akhir tidak boleh sebelum tanggal mulai.";
+  if ((to - from) / DAY + 1 > MAX_CUSTOM_DAYS) return "Rentang maksimal 1 tahun.";
+  return null;
+}
+
+// Rentang pilihan (inklusif kedua ujung) dibanding rentang sama panjang tepat sebelumnya.
+// Grafik per hari bila ≤ 31 hari ("days"), per 7 hari bila lebih ("weeks").
+export function customPeriods(fromYmd, toYmdStr, now = new Date()) {
+  const from = parseYmd(fromYmd);
+  const to = addDays(parseYmd(toYmdStr), 1);
+  const days = Math.round((to - from) / DAY);
+  const current = { from, to };
+  const previous = { from: addDays(from, -days), to: from };
+  const running = now >= from && now < to;
+  const day = Math.min(days, Math.floor((startOfDay(now) - from) / DAY) + 1);
+  return { unit: days <= 31 ? "days" : "weeks", custom: true, current, previous, prevLabel: "periode sebelumnya", progress: { day, days, running } };
+}
+
+// Pilihan cepat di panel tanggal (laporan mingguan = Senin–Minggu lalu).
+export function rangePresets(now = new Date()) {
+  const today = startOfDay(now);
+  const week = startOfWeek(now);
+  const month = startOfMonth(now);
+  const r = (key, label, from, to) => ({ key, label, from: toYmd(from), to: toYmd(to) });
+  return [
+    r("last_week", "Minggu lalu", addDays(week, -7), addDays(week, -1)),
+    r("last_7", "7 hari terakhir", addDays(today, -6), today),
+    r("last_14", "2 minggu terakhir", addDays(today, -13), today),
+    r("last_month", "Bulan lalu", addMonths(month, -1), addDays(month, -1)),
+    r("last_30", "30 hari terakhir", addDays(today, -29), today),
+  ];
 }
 
 export const within = (iso, range) => {
@@ -42,13 +92,27 @@ export const within = (iso, range) => {
   return t >= range.from.getTime() && t < range.to.getTime();
 };
 
-// Kelompok grafik: minggu → 7 hari (Sen..Min); bulan → minggu ke-1..5 (berdasarkan tanggal).
+// Kelompok grafik: minggu → 7 hari (Sen..Min); bulan → minggu ke-1..5 (berdasarkan tanggal);
+// rentang pilihan: "days" → per hari, "weeks" → per 7 hari sejak tanggal mulai.
 export function bucketOf(iso, range, unit) {
   const d = new Date(iso);
-  return unit === "week" ? Math.floor((startOfDay(d) - startOfDay(range.from)) / DAY) : Math.floor((d.getDate() - 1) / 7);
+  const idx = Math.floor((startOfDay(d) - startOfDay(range.from)) / DAY);
+  if (unit === "week" || unit === "days") return idx;
+  if (unit === "weeks") return Math.floor(idx / 7);
+  return Math.floor((d.getDate() - 1) / 7);
 }
 
-export const bucketLabels = (unit) => (unit === "week" ? ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"] : ["Mg 1", "Mg 2", "Mg 3", "Mg 4", "Mg 5"]);
+export function bucketLabels(unit, range) {
+  if (unit === "week") return ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+  if (unit === "month") return ["Mg 1", "Mg 2", "Mg 3", "Mg 4", "Mg 5"];
+  const days = Math.round((range.to - range.from) / DAY);
+  if (unit === "weeks") return Array.from({ length: Math.ceil(days / 7) }, (_, i) => `Mg ${i + 1}`);
+  return Array.from({ length: days }, (_, i) => {
+    const d = addDays(range.from, i);
+    return days <= 7 ? `${shortDayName(d)} ${d.getDate()}` : String(d.getDate());
+  });
+}
+const shortDayName = (d) => ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"][d.getDay()];
 
 const fmt = (d, year) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}) });
 // Label rentang, mis. "2 – 8 Nov 2026" atau "26 Okt – 1 Nov 2026". `to` eksklusif.
@@ -76,7 +140,12 @@ const shortDay = (d) => DAY_NAMES[d.getDay()].slice(0, 3);
 
 // Judul tooltip untuk satu kelompok grafik, mis. "Rabu, 4 Nov 2026" (minggu) atau "Minggu ke-2 · 8–14 Nov" (bulan).
 export function bucketTitle(range, unit, i) {
-  if (unit === "week") {
+  if (unit === "weeks") {
+    const first = dayAt(range, i * 7);
+    const last = new Date(Math.min(addDays(first, 6).getTime(), range.to.getTime() - 1));
+    return `Minggu ke-${i + 1} · ${short(first)} – ${short(last)}`;
+  }
+  if (unit === "week" || unit === "days") {
     const d = dayAt(range, i);
     return `${DAY_NAMES[d.getDay()]}, ${d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
   }
@@ -88,7 +157,8 @@ export function bucketTitle(range, unit, i) {
 
 // Label pendek kelompok pembanding, mis. "Rab, 28 Okt" (minggu) atau "Mg 2" (bulan).
 export function bucketShort(range, unit, i) {
-  if (unit === "week") {
+  if (unit === "weeks") return `Mg ${i + 1}`;
+  if (unit === "week" || unit === "days") {
     const d = dayAt(range, i);
     return `${shortDay(d)}, ${short(d)}`;
   }

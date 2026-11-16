@@ -204,9 +204,17 @@ function TeamApp({ auth }) {
       showToast(`Form dibuka di tab baru. Salin link ini secara manual: ${url}`, "error");
     }
   };
+  // Export CSV mengikuti halaman yang terbuka: Kanban = task sesuai filter/pencarian, Analitik = periode terpilih.
+  // Halaman mengisi exportRef.current = { label, filename, tasks: () => [...] }; tanpa itu semua task diekspor.
+  const exportRef = useRef(null);
   const exportCsv = () => {
     setSheetOpen(false);
-    downloadCsv(tasks);
+    setMenuOpen(false);
+    const scope = exportRef.current;
+    const list = scope ? scope.tasks() : tasks;
+    if (!list.length) return showToast("Tidak ada task untuk diekspor dengan filter ini.", "error");
+    downloadCsv(list, scope?.filename);
+    showToast(`${list.length} task diekspor${scope ? ` (${scope.label})` : ""}.`);
   };
 
   const search = (
@@ -269,7 +277,7 @@ function TeamApp({ auth }) {
         {onAdminPage && !isAdmin ? (
           <p className="empty-box">Halaman ini khusus admin.</p>
         ) : (
-          <Outlet context={{ tasks, allTasks, showToast, query, member: auth.member, members, allMembers: auth.members || [], designers, colorOf, isNew, markRead }} />
+          <Outlet context={{ tasks, allTasks, showToast, query, member: auth.member, members, allMembers: auth.members || [], designers, colorOf, isNew, markRead, exportRef }} />
         )}
       </main>
       <nav className={`bottom-nav ${isAdmin ? "four" : ""}`} aria-label="Navigasi utama">

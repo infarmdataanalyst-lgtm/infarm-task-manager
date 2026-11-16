@@ -33,7 +33,7 @@ function matchesDue(task, due) {
 const canDrag = () => typeof window !== "undefined" && window.matchMedia("(min-width: 721px) and (pointer: fine)").matches;
 
 export default function BoardPage() {
-  const { tasks, showToast, query, member, designers, colorOf, isNew, markRead } = useOutletContext();
+  const { tasks, showToast, query, member, designers, colorOf, isNew, markRead, exportRef } = useOutletContext();
   const location = useLocation();
   const kanbanRef = useRef(null);
   const { id } = useParams();
@@ -163,6 +163,21 @@ export default function BoardPage() {
   }, [follow, columns, goPage]);
 
   const filtersActive = query || mine || pic !== "all" || due !== "all";
+
+  // Export CSV di header: task yang tampil sesuai filter/pencarian (semua halaman kolom, Finish mengikuti 30 hari / "lihat lainnya").
+  const exportList = columns.flatMap((c) => c.items);
+  useEffect(() => {
+    if (!exportRef) return undefined;
+    const today = new Date().toISOString().slice(0, 10);
+    exportRef.current = {
+      label: filtersActive ? "sesuai filter Kanban" : "semua task di Kanban",
+      filename: `infarm-kanban${filtersActive ? "-filter" : ""}-${today}.csv`,
+      tasks: () => exportList,
+    };
+  });
+  useEffect(() => () => {
+    if (exportRef) exportRef.current = null;
+  }, [exportRef]);
 
   const assign = (t, name) => run(() => actions.assignPic(t.id, name), `PIC "${t.title}": ${name}. Task tetap di Request sampai ${name} memulainya.`);
   const start = async (t) => {

@@ -138,6 +138,16 @@ export async function listTasks() {
   return loading;
 }
 
+// Analitik rentang pilihan: task yang masuk ATAU selesai di rentang itu (termasuk yang tidak dimuat board).
+export async function listTasksBetween(fromIso, toIso) {
+  const [byFinish, byCreate] = await Promise.all([
+    db().from("tasks").select(SELECT_TASK).is("deleted_at", null).gte("finished_at", fromIso).lt("finished_at", toIso).limit(1000),
+    db().from("tasks").select(SELECT_TASK).is("deleted_at", null).gte("created_at", fromIso).lt("created_at", toIso).limit(1000),
+  ]);
+  const seen = new Set();
+  return [...must(byFinish), ...must(byCreate)].filter((r) => !seen.has(r.id) && seen.add(r.id)).map(fromRow);
+}
+
 // Cari di database (judul, brief, requester, divisi), untuk task Finish lama yang tidak dimuat di board.
 export async function searchTasks(query) {
   // Karakter khusus filter PostgREST/LIKE dibuang; spasi tetap.
