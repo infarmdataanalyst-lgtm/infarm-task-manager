@@ -12,7 +12,8 @@ import { finishedOnTime } from "../../lib/dates";
 import { bucketLabels, bucketOf, bucketShort, bucketTitle, comparePeriods, customPeriods, dayAt, dayCount, dayIndex, longDate, PERIODS, rangeError, rangeLabel, rangePresets, toYmd, within } from "../../lib/periods";
 import { STORAGE_MODE } from "../../config";
 import * as actions from "../../data/taskActions";
-import { fmtLongDate } from "../../lib/dates";
+import { daysBetween, fmtDayShort, fmtLongDate, parseDay } from "../../lib/dates";
+import { helpers } from "../../data/taskModel";
 import { fmtDuration, stageMinutes, WORKDAY_MINUTES } from "../../lib/worktime";
 import { Avatar, Modal } from "../../components/ui";
 
@@ -129,11 +130,11 @@ function DayBars({ cur, prev, labels, titles, prevTitles, tasksByBucket, color, 
               <button key={l} type="button" className={`bar-group ${tip === i ? "active" : ""}`} {...bind(i)}
                 aria-label={`${titles[i]}: ${cur[i]} task selesai, ${cmp.prevLabel} ${prev[i]}`}>
                 <span className="bar-slot">
-                  <span className="bar-num muted">{!dense && (prev[i] || "")}</span>
+                  <span className={`bar-num muted ${dense ? "screen-hide" : ""}`}>{prev[i] || ""}</span>
                   <span className="bar prev" style={{ height: barH(prev[i]) }} />
                 </span>
                 <span className="bar-slot">
-                  <span className="bar-num" style={{ color }}>{!dense && (cur[i] || "")}</span>
+                  <span className={`bar-num ${dense ? "screen-hide" : ""}`} style={{ color }}>{cur[i] || ""}</span>
                   <span className="bar" style={{ height: barH(cur[i]), background: color }} />
                 </span>
                 {tip === i && (
@@ -223,9 +224,14 @@ function DailyLines({ people, cmp }) {
             </svg>
             {tip !== null && <span className="hover-line" style={{ left: `${x(tip)}%` }} aria-hidden="true" />}
             {series.map((s, si) =>
-              s.slice(0, lastDay + 1).map((v, i) => (showDots || tip === i) && (
-                <span key={`${si}-${i}`} className={`dot-point ${tip === i ? "active" : ""}`} aria-hidden="true"
-                  style={{ left: `${x(i)}%`, bottom: `${y(v)}%`, borderColor: people[si].color }} />
+              s.slice(0, lastDay + 1).map((v, i) => (
+                <React.Fragment key={`${si}-${i}`}>
+                  <span className={`dot-point ${tip === i ? "active" : ""} ${showDots || tip === i ? "" : "screen-hide"}`} aria-hidden="true"
+                    style={{ left: `${x(i)}%`, bottom: `${y(v)}%`, borderColor: people[si].color }} />
+                  {v > 0 && (
+                    <span className={`point-val print-only ${si % 2 ? "below" : ""}`} aria-hidden="true" style={{ left: `${x(i)}%`, bottom: `${y(v)}%`, color: people[si].color }}>{v}</span>
+                  )}
+                </React.Fragment>
               ))
             )}
             <div className="hover-zones">
@@ -401,6 +407,68 @@ function BreakdownBars({ list }) {
   ));
 }
 
+// Tabel "Daftar task selesai" di rentang terpilih: hanya muncul di hasil cetak / PDF (paling bawah).
+function FinishedTable({ tasks, range }) {
+  const list = tasks.filter((t) => t.status === "finish" && within(t.finishedAt, range)).sort((a, b) => new Date(a.finishedAt) - new Date(b.finishedAt));
+  const onTime = list.filter(finishedOnTime).length;
+  const byPic = list.reduce((m, t) => ({ ...m, [t.pic || "-"]: (m[t.pic || "-"] || 0) + 1 }), {});
+  const work = list.map((t) => stageMinutes(t).on_progress);
+  const avgWork = work.length ? Math.round(work.reduce((a, b) => a + b, 0) / work.length) : null;
+  const day = (iso) => new Date(iso).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+  const late = (t) => (t.dueDate ? daysBetween(parseDay(t.dueDate), new Date(t.finishedAt)) : 0);
+  return (
+    <section className="print-only print-table" aria-label="Daftar task selesai">
+      <div className="row-between">
+        <h2 className="h-section">Daftar task selesai · {rangeLabel(range)}</h2>
+        <span className="small muted">
+          <strong>{list.length} task</strong>{list.length > 0 && ` · ${onTime} tepat waktu (${Math.round((onTime / list.length) * 100)}%) · ${Object.entries(byPic).map(([n, c]) => `${n} ${c}`).join(" · ")}`}
+        </span>
+      </div>
+      {list.length === 0 ? (
+        <p className="muted">Tidak ada task yang selesai di rentang ini.</p>
+      ) : (
+        <table className="report-table">
+          <thead>
+            <tr>
+              <th>No</th><th>Selesai</th><th>Judul</th><th>Kategori</th><th>Requester (divisi)</th><th>PIC</th><th>Bersama</th>
+              <th>Deadline</th><th>Ketepatan</th><th>Pengerjaan</th><th>Total waktu</th><th>Link hasil</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((t, i) => {
+              const st = stageMinutes(t);
+              const ok = finishedOnTime(t);
+              return (
+                <tr key={t.id}>
+                  <td>{i + 1}</td>
+                  <td className="nowrap">{day(t.finishedAt)}</td>
+                  <td className="strong">{t.title}</td>
+                  <td>{t.category}</td>
+                  <td>{t.requesterName} ({t.division})</td>
+                  <td className="nowrap">{t.pic || "-"}</td>
+                  <td>{helpers(t).join(", ") || "-"}</td>
+                  <td className="nowrap">{t.dueDate ? fmtDayShort(t.dueDate) : "-"}</td>
+                  <td><span className={`report-tag ${ok ? "ok" : "late"}`}>{ok ? "Tepat waktu" : `Terlambat ${late(t)} hari`}</span></td>
+                  <td className="nowrap">{fmtDuration(st.on_progress)}</td>
+                  <td className="nowrap">{fmtDuration(st.total)}</td>
+                  <td>{t.resultLinks.length ? "Ada" : "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={8}>Total {list.length} task{avgWork !== null && ` · rata-rata pengerjaan ${fmtDuration(avgWork)}`}</td>
+              <td>{Math.round((onTime / list.length) * 100)}%</td>
+              <td colSpan={3} />
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </section>
+  );
+}
+
 // Panel "Pilih tanggal": pilihan cepat + dari/sampai. Desktop: melayang di bawah tombol; HP: lembar dari bawah.
 function RangePanel({ initial, onApply, onClose }) {
   const [from, setFrom] = useState(initial.from);
@@ -556,10 +624,17 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <div className="print-only print-head">
-        <strong>Laporan analitik tim desain · {rangeLabel(cmp.current)}</strong>
-        <span>Dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel}) · dicetak {fmtLongDate(new Date())}</span>
-      </div>
+      <header className="print-only print-head">
+        <img src="/logo-infarm.png" alt="Logo Infarm" className="print-logo" />
+        <div className="grow">
+          <strong>Laporan analitik tim desain</strong>
+          <span className="print-range">{rangeLabel(cmp.current)} <span className="muted">· dibanding {rangeLabel(cmp.previous)} ({cmp.prevLabel})</span></span>
+        </div>
+        <div className="print-meta">
+          <strong>INFARM.ID · Tim Desain</strong>
+          <span>Dicetak {fmtLongDate(new Date())}</span>
+        </div>
+      </header>
       <div className="filter-bar no-print">
         <div className="segmented" role="group" aria-label="Periode">
           {PERIODS.map((p) => (
@@ -641,7 +716,8 @@ export default function AnalyticsPage() {
 
       {people.length > 0 && (
         <>
-          <div className="section-head print-new-page">
+          <div className="compare-block">
+          <div className="section-head">
             <h2 className="h-section">Perbandingan antar desainer</h2>
             <p className="small muted">{people.map((p) => p.name).join(" dan ")} dalam satu grafik, periode yang sama</p>
           </div>
@@ -668,6 +744,7 @@ export default function AnalyticsPage() {
               <TimeStacks people={people} />
             </div>
           </section>
+          </div>
         </>
       )}
 
@@ -680,6 +757,7 @@ export default function AnalyticsPage() {
           </div>
         ))}
       </section>
+      <FinishedTable tasks={tasks} range={cmp.current} />
       <p className="hint">
         Task yang dikerjakan bersama dihitung untuk PIC dan setiap pengerja checklist. Waktu hanya jam kerja Senin–Jumat 08.00–17.00 (1 hari = {WORKDAY_MINUTES / 60} jam kerja).
         Semua rata-rata waktu dihitung dari task yang selesai di periode ini. Periode ini dibandingkan dengan periode penuh sebelumnya; selama periode ini belum selesai, angkanya masih bisa bertambah.
