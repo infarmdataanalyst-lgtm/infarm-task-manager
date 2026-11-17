@@ -77,19 +77,22 @@ Foto, thumbnail, dan PDF dihapus otomatis **30 hari setelah task masuk Finish** 
 2. **Edge Functions** (menu kiri) → **Deploy a new function** → **Via Editor**.
    - Nama function: `hapus-lampiran` (persis, huruf kecil).
    - Hapus contoh kode yang ada, lalu tempel seluruh isi [`supabase/functions/hapus-lampiran/index.ts`](../supabase/functions/hapus-lampiran/index.ts) → **Deploy function**.
-   - Tidak perlu memasukkan kunci apa pun: Supabase memberi akses ke function ini secara otomatis.
-3. **Uji sekali:** buka function `hapus-lampiran` → tombol **Test** (atau **Invoke**) → **Send request**. Hasil yang benar berupa angka, mis. `{"task":0,"file":0,"yatim":0,"gagal":[]}` (0 wajar bila belum ada task yang selesai 30 hari lalu).
-4. **Integrations** → **Cron** → **Enable** (sekali), lalu **Create job**:
+   - Tidak perlu memasukkan kunci apa pun ke kode: Supabase memberi akses ke function ini secara otomatis.
+   - Buka function `hapus-lampiran` → **Details** (atau Settings) → matikan **Verify JWT** (Enforce JWT verification) → **Save**. Function memeriksa sendiri pemanggilnya: hanya yang membawa secret key proyek yang dilayani, lainnya ditolak (401).
+3. **Integrations** → **Cron** → **Install integration** (sekali). Bila diminta, nyalakan juga ekstensi `pg_net`. Lalu tab **Jobs** → **Create job**:
    - Name: `hapus-lampiran-harian`
    - Schedule: `0 18 * * *` (18.00 UTC = **01.00 WIB** setiap hari)
-   - Type: **Supabase Edge Function** → pilih `hapus-lampiran`, method **POST**
+   - Type: **Supabase Edge Function** → pilih `hapus-lampiran`, method **POST**, Timeout **5000** ms
+   - HTTP Headers: panah di sebelah **Add header** → **Add secret key** (kuncinya terisi otomatis; jangan disalin ke mana pun). Body dibiarkan kosong.
    - **Create cron job**.
+4. **Uji sekali:** di tab **Jobs**, pada baris `hapus-lampiran-harian` pilih **Run now** (bila ada), lalu lihat **History**; atau tunggu jadwal berikutnya. Hasil function bisa dilihat di **Edge Functions → hapus-lampiran → Logs**: baris `hapus-lampiran {"task":0,"file":0,"yatim":0,"gagal":[]}` (0 wajar bila belum ada task yang selesai 30 hari lalu). Tombol **Test** di halaman function kini dijawab 401 kecuali ditambah header `apikey` berisi secret key; itu tanda penjaganya bekerja.
 5. Cek keesokan harinya: **Integrations → Cron → hapus-lampiran-harian → History** menampilkan status *succeeded*, dan di halaman **Usage**, *Edge Function Invocations* bertambah 1 per hari.
 
 Catatan:
 - File yang sudah terhapus **tidak bisa dikembalikan**. Kartu dan detail task Finish menampilkan "Lampiran akan dihapus otomatis <tanggal>" sebagai pengingat untuk menyimpan file yang masih dibutuhkan.
 - Task yang direvisi (keluar dari Finish) sebelum 30 hari: hitungannya mulai lagi saat Finish berikutnya.
 - Paket Free dijeda setelah 7 hari tanpa aktivitas; selama dijeda Cron berhenti. Setelah aktif lagi, semua yang sudah lewat 30 hari diproses pada jadwal berikutnya.
+- Database perlu izin `grant select, update on public.tasks to service_role` (sudah ada di `schema.sql`). Tanpa itu function menjawab `permission denied for table tasks`.
 - Untuk mengubah 30 hari: ubah `RETENTION_DAYS` di function **dan** `ATTACHMENT_RETENTION_DAYS` di `src/config.js`, lalu deploy ulang function.
 
 ## Catatan

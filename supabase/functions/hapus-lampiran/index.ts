@@ -9,6 +9,10 @@
 //
 // Aman dipanggil berkali-kali: hanya file yang memenuhi syarat yang dihapus.
 // Kunci service role tersedia otomatis di Edge Function (SUPABASE_SERVICE_ROLE_KEY); jangan disalin ke mana pun.
+//
+// Penjaga pintu: "Verify JWT" function ini dimatikan (Cron memakai secret key baru, bukan JWT), jadi function
+// sendiri yang memeriksa pemanggil. Hanya pemanggil yang membawa secret key proyek (header Authorization:
+// Bearer <kunci> atau apikey) yang dilayani; selain itu dijawab 401 tanpa menyentuh apa pun.
 // Cara memasang: docs/PANDUAN-SUPABASE.md, bagian "Hapus lampiran otomatis".
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -18,10 +22,35 @@ const ORPHAN_HOURS = 24;
 const BUCKET = "references";
 const BATCH = 100; // task per jalan; sisanya diproses besok
 
+// Semua kunci rahasia proyek yang tersedia di Edge Function: secret key baru (JSON SUPABASE_SECRET_KEYS)
+// dan service role key lama.
+function secretKeys(): string[] {
+  const keys: string[] = [];
+  try {
+    const parsed = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
+    for (const v of Object.values(parsed)) if (typeof v === "string" && v) keys.push(v);
+  } catch (_) {
+    // format tidak dikenal: abaikan
+  }
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (legacy) keys.push(legacy);
+  return keys;
+}
+
+function authorized(req: Request): boolean {
+  const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  const apikey = (req.headers.get("apikey") || "").trim();
+  const keys = secretKeys();
+  return keys.some((k) => k === bearer || k === apikey);
+}
+
 type Attachment = { path?: string; thumbPath?: string };
 type Task = { id: string; title: string; attachments: Attachment[] };
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  if (!authorized(req)) {
+    return Response.json({ error: "tidak diizinkan" }, { status: 401 });
+  }
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
