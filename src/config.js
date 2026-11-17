@@ -31,6 +31,9 @@ export const STATUS = {
 // Lampiran request.
 export const MAX_ATTACHMENTS = 5;
 export const MAX_PDF_BYTES = 5 * 1024 * 1024;
+// Lampiran (foto, thumbnail, PDF) dihapus otomatis sekian hari setelah task Finish (atau diarsipkan).
+// Harus sama dengan RETENTION_DAYS di supabase/functions/hapus-lampiran/index.ts.
+export const ATTACHMENT_RETENTION_DAYS = 30;
 
 // Koneksi Supabase (database bersama). Atur di Vercel → Settings → Environment Variables:
 // REACT_APP_SUPABASE_URL dan REACT_APP_SUPABASE_PUBLISHABLE_KEY (atau key lama: REACT_APP_SUPABASE_ANON_KEY).

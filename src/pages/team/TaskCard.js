@@ -7,8 +7,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeftRight, Clock, ExternalLink, Play, Timer } from "lucide-react";
-import { canLeaveRequest, helpers, notPicMessage } from "../../data/taskModel";
-import { daysLate, fmtDayShort, fmtShort, isOverdue } from "../../lib/dates";
+import { attachmentsDeleteDate, canLeaveRequest, helpers, notPicMessage } from "../../data/taskModel";
+import { ATTACHMENT_RETENTION_DAYS } from "../../config";
+import { daysLate, fmtDayShort, fmtLongDate, fmtShort, isOverdue } from "../../lib/dates";
 import { displayUrl } from "../../lib/links";
 import { fmtDuration, isTimerRunning, taskTotalMinutes } from "../../lib/worktime";
 import { AttachmentStrip, Avatar } from "../../components/ui";
@@ -21,6 +22,7 @@ export default function TaskCard({ task: t, isNew, fromArchive, now, member, des
   const minutes = taskTotalMinutes(t, now); // total sejak request masuk
   const running = isTimerRunning(t);
   const canStart = canLeaveRequest(t, member);
+  const deleteOn = attachmentsDeleteDate(t, ATTACHMENT_RETENTION_DAYS);
   const open = () => navigate(`/tim/task/${t.id}`);
   const stop = (fn) => (e) => {
     e.stopPropagation();
@@ -53,6 +55,7 @@ export default function TaskCard({ task: t, isNew, fromArchive, now, member, des
       <span className="task-sub">{t.requesterName} · {t.division}</span>
       <AttachmentStrip attachments={t.attachments} />
       {t.attachmentsDeletedAt && !t.attachments.length && <span className="small muted">Lampiran dihapus otomatis</span>}
+      {deleteOn && <span className="attach-expiry">Lampiran akan dihapus otomatis {fmtLongDate(deleteOn)}</span>}
       <div className="task-meta">
         {t.pic && <span className="pic"><Avatar name={t.pic} color={colorOf(t.pic)} size={20} />{t.pic}</span>}
         {others.length > 0 && <span>· bersama {others.join(", ")}</span>}

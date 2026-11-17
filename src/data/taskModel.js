@@ -154,6 +154,15 @@ export const notPicMessage = (pic) => (pic ? `Hanya ${pic} (PIC) atau admin yang
 
 // ─── Turunan untuk tampilan ─────────────────────────────────────
 
+// Tanggal lampiran akan dihapus otomatis (null bila tidak ada lampiran / belum Finish / belum diarsipkan).
+// Padanan aturan di supabase/functions/hapus-lampiran: Finish atau arsip + ATTACHMENT_RETENTION_DAYS.
+export function attachmentsDeleteDate(t, days) {
+  if (!arr(t.attachments).length || t.attachmentsDeletedAt) return null;
+  const from = [t.status === "finish" ? t.finishedAt : null, t.deletedAt].filter(Boolean).map((d) => new Date(d).getTime());
+  if (!from.length) return null;
+  return new Date(Math.min(...from) + days * 86400000);
+}
+
 // Desainer selain PIC yang punya item checklist di task ini.
 export const helpers = (t) => [...new Set(t.checklist.map((c) => c.assignee).filter((a) => a && a !== t.pic))];
 
