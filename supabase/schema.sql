@@ -433,6 +433,9 @@ grant select, insert, update, delete on public.task_checklist to authenticated;
 grant select on public.work_sessions, public.task_history to authenticated;
 grant select, insert on public.task_reads to authenticated;
 grant select, insert, update, delete on public.team_members to authenticated;
+-- Edge Function hapus-lampiran (service role): membaca task dan mengosongkan lampiran.
+-- Proyek Supabase baru tidak lagi memberi izin tabel ke service_role secara otomatis.
+grant select, update on public.tasks to service_role;
 
 -- Requester: hanya request baru yang bersih (tanpa PIC, hasil, status lain).
 drop policy if exists "Kirim request baru" on public.tasks;
