@@ -624,23 +624,68 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 }
 
 /* ─── Cetak / simpan PDF (halaman Analitik) ──────────────── */
+/* Di layar: print-only disembunyikan; screen-hide = disembunyikan di layar tapi tetap tampil saat cetak. */
 .print-only { display: none; }
+.screen-hide { display: none; }
+.point-val { position: absolute; transform: translate(-50%, -14px); font-size: 10px; font-weight: 700; line-height: 1; pointer-events: none; }
+.point-val.below { transform: translate(-50%, 18px); }
+.report-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.report-table th { background: var(--brand-surface); color: var(--brand-soil); text-align: left; font-weight: 700; padding: 6px; border-bottom: 1.5px solid var(--brand-primary); white-space: nowrap; }
+.report-table td { padding: 5px 6px; border-bottom: 1px solid var(--zinc-100); vertical-align: top; }
+.report-table td.nowrap { white-space: nowrap; }
+.report-table td.strong { font-weight: 600; }
+.report-table tfoot td { font-weight: 700; border-top: 1.5px solid var(--brand-primary); border-bottom: 0; padding-top: 6px; }
+.report-tag { display: inline-block; border-radius: 9999px; padding: 1px 8px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.report-tag.ok { background: #e3f5e3; color: var(--brand-primary); }
+.report-tag.late { background: #fde4e4; color: #b91c1c; }
 @media print {
   @page { size: A4 landscape; margin: 10mm; }
   html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .app-header, .new-banner, .tabs, .bottom-nav, .local-banner, .load-error, .no-print, .info-btn, .chart-tip, .toast, .modal-wrap { display: none !important; }
-  .print-only { display: flex !important; }
-  .print-head { flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 2px solid var(--brand-primary); }
-  .print-head strong { font-family: var(--font-heading); font-size: 18px; }
-  .container.page { max-width: none; padding: 0 !important; gap: 12px; zoom: 0.72; }
+  .app-header, .new-banner, .tabs, .bottom-nav, .local-banner, .load-error, .no-print, .info-btn, .chart-tip, .toast, .modal-wrap, .hover-line { display: none !important; }
   nav.tabs, nav.segmented { display: none !important; }
-  .card, .stat, .compare-grid > *, .grid-auto-340 > * { break-inside: avoid; box-shadow: none !important; }
+  .print-only { display: flex !important; }
+  .screen-hide { display: revert !important; }
+  .dot-point.screen-hide, .point-val { display: block !important; }
+  .container.page { max-width: none; padding: 0 !important; gap: 8px; zoom: 0.68; }
+
+  /* Kop (halaman pertama): logo kiri atas, judul + rentang, kanan nama tim + tanggal cetak */
+  .print-head { align-items: center; gap: 14px; padding-bottom: 8px; border-bottom: 2.5px solid var(--brand-primary); }
+  .print-logo { width: 64px; height: 48px; object-fit: contain; }
+  .print-head .grow { display: flex; flex-direction: column; gap: 2px; }
+  .print-head .grow strong { font-family: var(--font-heading); font-size: 20px; }
+  .print-range { font-size: 13px; font-weight: 600; color: var(--brand-primary); }
+  .print-range .muted { font-weight: 400; }
+  .print-meta { display: flex; flex-direction: column; align-items: flex-end; font-size: 11px; color: var(--text-muted); }
+  .print-meta strong { color: var(--text); }
+
+  .card, .stat, .grid-auto-340 > * { break-inside: avoid; box-shadow: none !important; }
   .section-head { break-after: avoid; }
-  .print-new-page { break-before: page; }
   .stats { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)) !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
   .grid-auto-340 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  .compare-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) !important; }
+  .bar-group:hover, .bar-group.active { background: transparent !important; }
+
+  /* Perbandingan antar desainer: satu blok (judul + 3 grafik) yang pindah halaman bersama.
+     Kiri: grafik garis setinggi 2 kartu; kanan: ketepatan waktu, di bawahnya rata-rata waktu per task. */
+  .compare-block { display: flex; flex-direction: column; gap: 8px; break-inside: avoid; }
+  .compare-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) !important; grid-template-rows: auto auto; }
+  .compare-grid > :first-child { grid-row: 1 / span 2; }
+  .compare-grid .compare-wide { grid-column: 2 !important; }
+  .compare-grid .compare-wide .row-between .small { display: none; }
+  .compare-grid .hbar-row { grid-template-columns: minmax(0, 1fr) 150px; }
   .chart-with-legend { grid-template-columns: minmax(0, 1fr) auto !important; }
   .chart-legend.vertical { flex-direction: column !important; }
-  .bar-group:hover, .bar-group.active { background: transparent !important; }
+  .chart-plot.tall { height: 250px; }
+  /* Kartu desainer dipadatkan supaya perbandingan muat di halaman 1 */
+  .grid-auto-340 > .card.stack-lg { gap: 8px; padding: 12px 14px; }
+  .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 6px; }
+  .metric { padding: 6px 8px; }
+  .metric .value { font-size: 16px; }
+  .metric .delta { font-size: 10px; }
+  .grid-auto-340 .chart-plot { height: 120px; }
+
+  /* Tabel daftar task selesai: paling bawah, judul kolom diulang tiap halaman, baris tidak terbelah */
+  .print-table { display: block !important; break-before: auto; }
+  .print-table .row-between { margin-bottom: 6px; }
+  .report-table thead { display: table-header-group; }
+  .report-table tr { break-inside: avoid; }
 }
