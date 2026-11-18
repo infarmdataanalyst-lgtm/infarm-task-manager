@@ -163,6 +163,9 @@ export function attachmentsDeleteDate(t, days) {
   return new Date(Math.min(...from) + days * 86400000);
 }
 
+// Link folder Google Drive tempat lampiran dipindah otomatis (ditambahkan Edge Function hapus-lampiran).
+export const driveLink = (t) => arr(t.referenceLinks).find((l) => l.arsip) || null;
+
 // Desainer selain PIC yang punya item checklist di task ini.
 export const helpers = (t) => [...new Set(t.checklist.map((c) => c.assignee).filter((a) => a && a !== t.pic))];
 

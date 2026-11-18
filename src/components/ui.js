@@ -2,10 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link as LinkIcon, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, FolderOpen, Link as LinkIcon, X } from "lucide-react";
 import { ATTACHMENT_RETENTION_DAYS, STATUS, STORAGE_MODE } from "../config";
 import { displayUrl } from "../lib/links";
 import { fmtBytes } from "../lib/images";
+import { fmtLongDate } from "../lib/dates";
+import { driveLink } from "../data/taskModel";
 
 export function AppHeader({ title, subtitle, to = "/", narrow = false, center, children }) {
   return (
@@ -212,6 +214,18 @@ export function AttachmentList({ task, onRemove }) {
   const [zoom, setZoom] = useState(null); // indeks foto yang dibuka
   const photos = task.attachments.filter((a) => a.type !== "pdf" && a.url);
   if (!task.attachments.length) {
+    const drive = task.attachmentsDeletedAt && driveLink(task);
+    if (drive) {
+      return (
+        <p className="empty-box drive-note">
+          <FolderOpen size={16} aria-hidden="true" />
+          <span>
+            {drive.files ? `${drive.files} lampiran` : "Lampiran"} dipindah ke Google Drive pada {fmtLongDate(task.attachmentsDeletedAt)}.{" "}
+            <a href={drive.url} target="_blank" rel="noopener noreferrer">Buka folder Google Drive</a>
+          </span>
+        </p>
+      );
+    }
     return <p className="empty-box">{task.attachmentsDeletedAt ? `Lampiran sudah dihapus otomatis ${ATTACHMENT_RETENTION_DAYS} hari setelah task selesai.` : "Tidak ada lampiran."}</p>;
   }
   return (
@@ -246,9 +260,10 @@ export function LinkList({ links, emptyText }) {
   return (
     <div className="stack">
       {links.map((l) => (
-        <a key={l.id} className="link-row link-row-added" href={l.url} target="_blank" rel="noopener noreferrer">
-          <LinkIcon size={16} aria-hidden="true" />
+        <a key={l.id} className={`link-row link-row-added ${l.arsip ? "link-row-drive" : ""}`} href={l.url} target="_blank" rel="noopener noreferrer">
+          {l.arsip ? <FolderOpen size={16} aria-hidden="true" /> : <LinkIcon size={16} aria-hidden="true" />}
           <span className="url">{displayUrl(l.url)}</span>
+          {l.label && <span className="link-label">{l.label}</span>}
           <ExternalLink size={14} aria-hidden="true" />
         </a>
       ))}

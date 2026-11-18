@@ -124,7 +124,7 @@ function Attachments({ task, run, busy }) {
         onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
       {(() => {
         const on = attachmentsDeleteDate(task, ATTACHMENT_RETENTION_DAYS);
-        return on && <p className="attach-expiry">Lampiran akan dihapus otomatis {fmtLongDate(on)} ({ATTACHMENT_RETENTION_DAYS} hari setelah {task.deletedAt ? "dihapus" : "selesai"}). Simpan file yang masih dibutuhkan sebelum tanggal itu.</p>;
+        return on && <p className="attach-expiry">Lampiran akan dipindah ke Google Drive {fmtLongDate(on)} ({ATTACHMENT_RETENTION_DAYS} hari setelah {task.deletedAt ? "dihapus" : "selesai"}). Setelah itu buka lewat link "Lampiran (Google Drive)" di bawah.</p>;
       })()}
       <AttachmentList task={task} onRemove={setConfirm} />
       {confirm && (
