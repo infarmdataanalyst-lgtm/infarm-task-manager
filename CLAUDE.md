@@ -63,10 +63,13 @@ Tim Desain (Denny & Arum) memproses task di papan Kanban internal sampai selesai
    - Kartu: total (berjalan, hijau bila belum Finish). Detail: rincian Di Request · Di On Progress · Di Delay · Total. Export CSV: keempat angka dalam menit.
    - Analitik "rata-rata pengerjaan" memakai waktu di On Progress. Task bersama: durasi dihitung untuk PIC **dan** setiap pengerja checklist.
    - Hari libur nasional belum diperhitungkan (bisa ditambah daftar libur nanti).
-7. **Lampiran dihapus otomatis 30 hari setelah Finish** (diubah dari 7 hari, 10 Nov 2026; `ATTACHMENT_RETENTION_DAYS` di `config.js` = `RETENTION_DAYS` di Edge Function). Foto, thumbnail, dan PDF. Juga 30 hari setelah task diarsipkan, dan file yatim (folder Storage tanpa task) > 1 hari. Baris task, link referensi, link hasil, checklist, waktu kerja tetap ada; riwayat `lampiran_dihapus` oleh "sistem".
-   - Sebelum dihapus: kartu dan detail menampilkan "Lampiran akan dihapus otomatis 10 Desember 2026" (`attachmentsDeleteDate` di `taskModel.js`). Sesudah: "Lampiran dihapus otomatis".
-   - Kalau task direvisi sebelum 30 hari, hitungan dimulai lagi dari Finish berikutnya. Lampiran baru yang ditambahkan setelah penghapusan mengosongkan lagi `attachments_deleted_at` (trigger).
-   - Mekanisme: Supabase Edge Function `supabase/functions/hapus-lampiran/index.ts` (hapus file lewat Storage API, lalu update task dengan service role; Verify JWT dimatikan, function sendiri hanya melayani pemanggil yang membawa secret key — Cron memakai "Add secret key") dijalankan Supabase Cron setiap hari 18.00 UTC (01.00 WIB). Dipasang manual lewat dashboard: `docs/PANDUAN-SUPABASE.md` bagian 7.
+7. **Lampiran dipindah ke Google Drive 30 hari setelah Finish** (18 Nov 2026; sebelumnya dihapus begitu saja; `ATTACHMENT_RETENTION_DAYS` di `config.js` = `RETENTION_DAYS` di Edge Function). Juga 30 hari setelah task diarsipkan. Task tidak pernah dihapus.
+   - Urutan per task (aman bila gagal di tengah): (a) Apps Script `supabase/apps-script/arsip-drive.gs` (Web app milik akun pemilik folder, tanpa trigger) menyalin foto ukuran penuh + PDF ke `<folder induk>/<YYYY-MM>/<tanggal selesai> · <judul> (<requester>, <divisi>)` (subfolder dikenali dari ID task di deskripsi folder; file yang sudah ada dilewati); (b) satu update task: `reference_links` + `{label: "Lampiran (Google Drive)", arsip: true, files: N}`, `attachments = []`, `attachments_deleted_at` (hanya bila `updated_at` belum berubah); (c) baru hapus foto, thumbnail, PDF dari Storage. Gagal di (a)/(b) = tidak ada yang dihapus, dicoba lagi besok. Sisa file setelah (c) gagal + file yatim (folder Storage tanpa task, > 1 hari) dibersihkan di jalan berikutnya.
+   - Pengaman: Apps Script memeriksa `ARSIP_TOKEN` (Script Properties = Supabase Secret); tanpa `ARSIP_URL`/`ARSIP_TOKEN` petugas tidak menghapus lampiran apa pun. Maks 15 task per malam; pekerjaan berjalan di latar (`EdgeRuntime.waitUntil`), hasil di Logs `hapus-lampiran {...}`.
+   - Task direvisi sebelum 30 hari: hitungan mulai lagi dari Finish berikutnya. Lampiran baru setelah dipindah mengosongkan lagi `attachments_deleted_at` (trigger) dan nanti masuk ke subfolder Drive yang sama.
+   - Mode uji: body `{"uji": true}` (Cron sementara `uji-arsip-drive`) → hanya task berjudul `[TESTING]…`, tanpa bersih-bersih.
+   - Tampilan: sebelum dipindah, kartu "Lampiran dipindah ke Google Drive 10 Desember 2026" (`attachmentsDeleteDate`); sesudah, kartu "Lampiran ada di Google Drive (N file)", detail "N lampiran dipindah ke Google Drive pada …" + link folder, Link referensi berlabel (`driveLink` di `taskModel.js`, `LinkList`). Riwayat `lampiran_dihapus` + perubahan `reference_links` tampil "memindah lampiran ke Google Drive" (`changes.js`).
+   - Mekanisme: Supabase Edge Function `supabase/functions/hapus-lampiran/index.ts` (Verify JWT dimatikan; function sendiri hanya melayani pemanggil yang membawa secret key, Cron memakai "Add secret key") dijalankan Supabase Cron `hapus-lampiran-harian` setiap hari 18.00 UTC (01.00 WIB). Dipasang manual: `docs/PANDUAN-ARSIP-DRIVE.md` (Apps Script, secrets, uji) dan `docs/PANDUAN-SUPABASE.md` bagian 7.
 8. **Detail task = pop-up mengambang** di tengah layar (HP: layar penuh), dibuka dengan klik kartu.
    - Kanan atas: ikon **hijau Edit**, **merah Hapus** (dengan konfirmasi), **abu-abu Tutup**.
    - Isi: info request, lampiran, link referensi, checklist per orang, link hasil, waktu kerja, riwayat task, aksi pindah kolom.
@@ -111,7 +114,7 @@ Pakai React Router (path asli) + rewrite di `vercel.json`.
 - Penyimpanan: **Supabase** (`@supabase/supabase-js`) bila `REACT_APP_SUPABASE_URL` + key diatur; kalau tidak, **mode uji coba** `localStorage`. Pemilihan otomatis di `src/data/taskStore.js`.
 - Login: **Supabase Auth (Google)**. Mode uji coba: akun tiruan (`LOCAL_MEMBERS` di `config.js`).
 - Geser kartu: **HTML5 drag and drop bawaan** (tanpa pustaka), hanya desktop dengan mouse. HP, layar sentuh, dan keyboard memakai tombol "Pindah ke…".
-- Hapus lampiran otomatis: Supabase Edge Function `hapus-lampiran` (Deno) + Supabase Cron harian. File Storage dihapus lewat Storage API, bukan `delete from storage.objects`. Kode function ada di repo tetapi di-deploy manual lewat dashboard (tidak ada CI Supabase).
+- Pindah lampiran ke Google Drive: Supabase Edge Function `hapus-lampiran` (Deno) + Supabase Cron harian + Google Apps Script (Web app). File Storage dihapus lewat Storage API, bukan `delete from storage.objects`. Kode function ada di repo tetapi di-deploy manual lewat dashboard (tidak ada CI Supabase).
 - `api/request.js`: Vercel Serverless Function lama untuk Google Apps Script. Tidak dipakai frontend dan tidak menyimpan data.
 
 ## Perintah
@@ -203,7 +206,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 - **Tahap 1 (sudah):** skema v8 + RLS + trigger, login Google + `team_members`, form `/` foto + PDF maks 5 + thumbnail, board 4 kolom (urut deadline), geser kartu + "Pindah ke…", tombol Arum/Denny di kartu Request, pop-up detail (Edit/Hapus/Tutup), checklist per orang, waktu kerja jam kerja, riwayat di detail, hapus = arsip, pencarian judul, filter Tugas saya/PIC/deadline, menu bawah HP.
 - **Tahap 2 (sudah):** analitik per orang + pembanding minggu/bulan lalu, halaman Audit (admin, termasuk pulihkan task terhapus), halaman Anggota (admin), edit lampiran oleh tim.
 - **Sudah ditarik dari tahap 3:** banner + kartu "Baru" per akun (`task_reads`).
-- **Tahap 3:** penghapusan lampiran otomatis 30 hari setelah Finish (kode sudah, 10 Nov 2026; perlu dipasang di dashboard Supabase), (opsional, belum) halaman `/privasi` untuk Publish di Google.
+- **Tahap 3:** lampiran dipindah ke Google Drive 30 hari setelah Finish (Edge Function + Cron terpasang 17 Nov 2026; Apps Script + secrets: `docs/PANDUAN-ARSIP-DRIVE.md`), (opsional, belum) halaman `/privasi` untuk Publish di Google.
 
 ## Dari v7 ke v8 (ringkasan perubahan)
 
@@ -213,7 +216,7 @@ Trigger database (sumber kebenaran; mode uji coba menirunya di `applyTransition`
 | Requester | Halaman status publik `/` + edit `/request/:id/edit` | Hanya form `/`; tidak bisa melihat/mengedit |
 | Kolom | Request, Todo, On Progress, Finish | Request, On Progress, Delay, Finish |
 | Pindah kolom | Tombol per tahap | Geser kartu + "Pindah ke…" (maju/mundur) |
-| Lampiran | Gambar saja, maks 6, hapus manual saat Finish | Gambar + PDF, maks 5, thumbnail, hapus otomatis 30 hari setelah Finish |
+| Lampiran | Gambar saja, maks 6, hapus manual saat Finish | Gambar + PDF, maks 5, thumbnail, dipindah ke Google Drive 30 hari setelah Finish |
 | Detail | Panel kanan 480px | Pop-up tengah + ikon Edit/Hapus/Tutup |
 | Riwayat | actor "requester"/"tim" | Akun Google pelaku, semua perubahan, tidak bisa diubah; halaman audit admin |
 | Hapus task | Permanen | Arsip, bisa dipulihkan admin |
@@ -235,7 +238,9 @@ src/config.js              CATEGORIES, DIVISIONS, STATUS(ES), batas lampiran, ko
 src/styles.css             semua style (token Infarm, komponen, responsive)
 supabase/schema.sql        skema v8: tabel, RLS, trigger (riwayat, sesi kerja, aturan kolom), work_minutes(), Storage, Realtime
 supabase/anggota-awal.sql  anggota awal (Gmail Denny, Arum, SPV) — diisi pemilik proyek, dijalankan sekali
-supabase/functions/hapus-lampiran/index.ts  Edge Function harian: hapus lampiran 30 hari setelah Finish/arsip + file yatim
+supabase/functions/hapus-lampiran/index.ts  Edge Function harian: pindah lampiran ke Google Drive 30 hari setelah Finish/arsip + bersihkan file yatim
+supabase/apps-script/arsip-drive.gs  Google Apps Script (Web app): simpan lampiran satu task ke folder Drive, dipanggil hapus-lampiran
+docs/PANDUAN-ARSIP-DRIVE.md  panduan pasang Apps Script + secrets + uji mode [TESTING]
 supabase/reset-anggota.sql ganti SEMUA anggota (mis. akun uji coba → akun asli); opsional kosongkan task uji coba
 docs/PANDUAN-SUPABASE.md   panduan non-teknis menyiapkan Supabase + Google + Vercel
 src/data/

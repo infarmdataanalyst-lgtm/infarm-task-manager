@@ -36,7 +36,7 @@ export const ACTION_LABEL = {
   checklist: "mengubah checklist",
   dihapus: "menghapus task",
   dipulihkan: "memulihkan task",
-  lampiran_dihapus: "menghapus lampiran otomatis",
+  lampiran_dihapus: "memindah lampiran ke Google Drive / menghapus lampiran otomatis",
 };
 
 const list = (v) => (Array.isArray(v) ? v : []);
@@ -66,9 +66,17 @@ export function describeChange({ field, before, after }) {
 }
 
 // Satu baris riwayat: "Arum mengambil task · Kolom: Request → On Progress; PIC: - → Arum".
+// lampiran_dihapus + link referensi bertambah = lampiran dipindah ke Google Drive (Edge Function hapus-lampiran).
+const actionText = (h) => {
+  if (h.action === "lampiran_dihapus") {
+    return h.changes.some((c) => c.field === "reference_links") ? "memindah lampiran ke Google Drive" : "menghapus lampiran otomatis";
+  }
+  return ACTION_LABEL[h.action] || h.action;
+};
+
 export const describeEntry = (h) => ({
   who: h.actorName,
-  what: ACTION_LABEL[h.action] || h.action,
+  what: actionText(h),
   details: h.changes
     .filter((c) => !(h.action !== "diubah" && c.field === "status"))
     .map((c) => {

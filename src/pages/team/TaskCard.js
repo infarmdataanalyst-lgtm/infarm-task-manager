@@ -6,8 +6,8 @@
 
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeftRight, Clock, ExternalLink, Play, Timer } from "lucide-react";
-import { attachmentsDeleteDate, canLeaveRequest, helpers, notPicMessage } from "../../data/taskModel";
+import { ArrowLeftRight, Clock, ExternalLink, FolderOpen, Play, Timer } from "lucide-react";
+import { attachmentsDeleteDate, canLeaveRequest, driveLink, helpers, notPicMessage } from "../../data/taskModel";
 import { ATTACHMENT_RETENTION_DAYS } from "../../config";
 import { daysLate, fmtDayShort, fmtLongDate, fmtShort, isOverdue } from "../../lib/dates";
 import { displayUrl } from "../../lib/links";
@@ -23,6 +23,7 @@ export default function TaskCard({ task: t, isNew, fromArchive, now, member, des
   const running = isTimerRunning(t);
   const canStart = canLeaveRequest(t, member);
   const deleteOn = attachmentsDeleteDate(t, ATTACHMENT_RETENTION_DAYS);
+  const drive = t.attachmentsDeletedAt && !t.attachments.length ? driveLink(t) : null;
   const open = () => navigate(`/tim/task/${t.id}`);
   const stop = (fn) => (e) => {
     e.stopPropagation();
@@ -54,8 +55,9 @@ export default function TaskCard({ task: t, isNew, fromArchive, now, member, des
       <a href={`/tim/task/${t.id}`} className="task-title" onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(); }}>{t.title}</a>
       <span className="task-sub">{t.requesterName} · {t.division}</span>
       <AttachmentStrip attachments={t.attachments} />
-      {t.attachmentsDeletedAt && !t.attachments.length && <span className="small muted">Lampiran dihapus otomatis</span>}
-      {deleteOn && <span className="attach-expiry">Lampiran akan dihapus otomatis {fmtLongDate(deleteOn)}</span>}
+      {drive && <span className="drive-chip"><FolderOpen size={13} aria-hidden="true" />Lampiran ada di Google Drive{drive.files ? ` (${drive.files} file)` : ""}</span>}
+      {t.attachmentsDeletedAt && !t.attachments.length && !drive && <span className="small muted">Lampiran dihapus otomatis</span>}
+      {deleteOn && <span className="attach-expiry">Lampiran dipindah ke Google Drive {fmtLongDate(deleteOn)}</span>}
       <div className="task-meta">
         {t.pic && <span className="pic"><Avatar name={t.pic} color={colorOf(t.pic)} size={20} />{t.pic}</span>}
         {others.length > 0 && <span>· bersama {others.join(", ")}</span>}
